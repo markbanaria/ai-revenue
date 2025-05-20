@@ -23,10 +23,14 @@ Extract the money transaction and return this schema:
   sender: string
 }
 
-If you have all fields, reply with a message like "Your transaction has been uploaded." and include the JSON in a code block. 
+If you have all fields, reply with a message like
+Here are your receipt details: ..., would you like to change anything or can I upload it?
+If you are missing any fields, reply with a message like "sender: john"
+if the user has confirmed the details, reply with "Your transaction has been uploaded." and include the JSON in a code block.
+"Your transaction has been uploaded." and include the JSON in a code block. 
 If not, ask the user for the missing info conversationally. 
-You can mention all the missing fields, but then right after, ask it for just one field. 
-eg. sender and amount still missing, first can you send the sender? 
+You should mention all the missing fields, but then right after, ask it for just one field. 
+eg. sender and amount still missing, first can you send the sender?
 
 Always keep the conversation natural and friendly. 
 Only include the JSON when all fields are filled.
@@ -142,6 +146,12 @@ export async function POST(req: NextRequest) {
   const aiReply = res.choices[0].message.content?.trim() ?? '';
   chatHistories[chatId].push({ role: 'assistant', content: aiReply });
 
+  // Remove any JSON code block from the AI reply for Telegram messages
+  const replyWithoutJson = aiReply
+    .replace(/```json[\s\S]*?```/g, '')
+    .replace(/```[\s\S]*?```/g, '')
+    .trim();
+
   // Check if AI reply contains a JSON block (transaction complete)
   const parsed = extractJSON(aiReply);
   if (parsed && REQUIRED_FIELDS.every(f => parsed[f] !== undefined && parsed[f] !== '' && parsed[f] !== 'unknown')) {
@@ -150,13 +160,13 @@ export async function POST(req: NextRequest) {
     if (error) {
       await sendTelegram(chatId, "❌ Upload failed. Please try again.");
     } else {
-      await sendTelegram(chatId, aiReply.replace(/```json[\s\S]*?```/, '').trim() + "\n🎉 Uploaded successfully!");
+      await sendTelegram(chatId, replyWithoutJson + "\n🎉 Uploaded successfully!");
     }
     delete chatHistories[chatId];
     return NextResponse.json({ ok: true });
   }
 
-  // Otherwise, just send the AI's reply
-  await sendTelegram(chatId, aiReply);
+  // Otherwise, just send the AI's reply (without JSON code block)
+  await sendTelegram(chatId, replyWithoutJson);
   return NextResponse.json({ ok: true });
 }
