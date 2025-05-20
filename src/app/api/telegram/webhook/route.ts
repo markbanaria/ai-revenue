@@ -194,7 +194,8 @@ You are an assistant helping users confirm or edit transaction data.
 Given the current data and the user's reply, return one of:
 - If the user says "confirm" and all required fields are present, reply with: {"action":"confirm","data":{...}}
 - If the user says "change field:value, ..." update the fields and reply with: {"action":"change","data":{...}}
-- If after changes, some required fields are missing or unknown, reply with: {"action":"missing","data":{...}, "missingFields":["field1", ...]}
+- If after first sent, some required fields are missing or unknown, reply with: {"action":"missing","data":{...}, "missingFields":["field1", ...]}
+- If after replying to a missing, some required fields are missing or unknown, reply with: {"action":"missing","data":{...}, "missingFields":["field1", ...]}
 
 Required fields: ${requiredFields.join(', ')}
 Current data: ${JSON.stringify(sessionData)}
@@ -233,7 +234,37 @@ export async function POST(req: NextRequest) {
   // If user is in a session and replying to a missing field or confirmation
   if (sessions[chatId] && message.text) {
     const session = sessions[chatId];
-    const aiResult = await handleConfirmationAI(message.text.trim(), session.data, REQUIRED_FIELDS);
+    const userInput = message.text.trim();
+
+    // Fallback: If user replies with a value and there are missing fields, assign it to the first missing field
+    if (
+      session.missingFields?.length > 0 &&
+      userInput &&
+      !userInput.toLowerCase().startsWith('change') &&
+      !userInput.toLowerCase().startsWith('confirm') &&
+      userInput.toLowerCase() !== 'skip'
+    ) {
+      // Assign the reply to the first missing field
+      const filledField = session.missingFields[0];
+      session.data[filledField] = userInput;
+      // Remove the filled field from missingFields
+      session.missingFields = session.missingFields.slice(1);
+
+      if (session.missingFields.length === 0) {
+        await sendTelegram(chatId, `✅ Please confirm the details:\n${summarize(session.data)}\n\nReply 'confirm' to upload or 'change field:value, ...' to edit.`);
+        session.lastActive = Date.now();
+        session.lastMissingField = undefined;
+        return NextResponse.json({ ok: true });
+      } else {
+        await sendTelegram(chatId, `Some fields are still missing. Please provide "${session.missingFields[0]}":`);
+        session.lastActive = Date.now();
+        session.lastMissingField = session.missingFields[0];
+        return NextResponse.json({ ok: true });
+      }
+    }
+
+    // Always process user input with AI to update session data
+    const aiResult = await handleConfirmationAI(userInput, session.data, REQUIRED_FIELDS);
 
     if (aiResult.action === 'confirm') {
       const { error } = await supabase.from('transactions').insert([aiResult.data]);
@@ -267,7 +298,7 @@ export async function POST(req: NextRequest) {
         await sendTelegram(chatId, `Some fields are still missing. Please provide "${session.missingFields[0]}":`);
       }
       session.lastActive = Date.now();
-      session.lastMissingField = session.missingFields[0]; // Track last missing field
+      session.lastMissingField = session.missingFields[0];
       return NextResponse.json({ ok: true });
     }
   }
