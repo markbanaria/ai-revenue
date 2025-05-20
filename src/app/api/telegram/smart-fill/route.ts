@@ -35,7 +35,7 @@ Only include the JSON when all fields are filled.
 const REQUIRED_FIELDS = ['store_id', 'type', 'amount', 'date', 'source', 'reference', 'sender'];
 
 // In-memory chat history (cleared on server restart)
-const chatHistories: Record<number, Array<{ role: 'user' | 'assistant', content: string }>> = {};
+const chatHistories: Record<number, Array<{ role: 'user' | 'assistant', content: any }>> = {};
 
 function extractJSON(content: string): any | null {
   const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
@@ -120,8 +120,8 @@ export async function POST(req: NextRequest) {
     );
     chatHistories[chatId] = aiMessages.slice(1)
       .filter(
-        (msg): msg is { role: 'user' | 'assistant'; content: string } =>
-          (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string'
+        (msg): msg is { role: 'user' | 'assistant'; content: any } =>
+          (msg.role === 'user' || msg.role === 'assistant')
       )
       .map(msg => ({ role: msg.role, content: msg.content }));
     // Store only the conversation, not the system prompt
