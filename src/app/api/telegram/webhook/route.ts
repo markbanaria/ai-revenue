@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     const telegramFileURL = `https://api.telegram.org/file/bot${process.env.TELEGRAM_TOKEN}/${filePath}`;
 
     // Step 2: Send image to OpenAI Vision
-    const parsed = await extractFromImage(telegramFileURL, chatId);
+    const parsed = await extractFromImage(telegramFileURL, chatId, message);
 
     if (parsed.success) {
       await sendTelegram(chatId, "✅ Your receipt is valid.");
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     }
 
   } else if (message.text) {
-    const parsed = await extractFromText(message.text, chatId);
+    const parsed = await extractFromText(message.text, chatId, message);
 
     if (parsed.success) {
       await sendTelegram(chatId, "✅ Your receipt is valid.");
@@ -85,10 +85,10 @@ function extractJSON(content: string): any | null {
   }
 }
 
-async function extractFromImage(imageUrl: string, chatId: number) {
+async function extractFromImage(imageUrl: string, chatId: number, message: any) {
   try {
     const result = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'system',
@@ -106,6 +106,8 @@ async function extractFromImage(imageUrl: string, chatId: number) {
     });
 
     const content = result.choices[0].message.content?.trim();
+    console.log("OCR result:", content); // Log the OCR result
+
     const parsed = content ? extractJSON(content) : null;
     if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) return { success: false };
 
@@ -116,11 +118,15 @@ async function extractFromImage(imageUrl: string, chatId: number) {
 
     const storeId = STORE_MAP[chatId] || 'store_unknown';
 
+    // Get message date in YYYY-MM-DD format
+    const sentDate = new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000)
+      .toISOString().slice(0, 10);
+
     const data = (Array.isArray(parsed) ? parsed : [parsed]).map(d => ({
       ...d,
       store_id: storeId,
       source: 'telegram',
-      date: d.date && d.date.trim() !== "" ? d.date : null,
+      date: d.date && d.date.trim() !== "" ? d.date : sentDate, // Fill with sent date if missing
     }));
 
     const { error } = await supabase.from('transactions').insert(data);
@@ -138,10 +144,10 @@ async function extractFromImage(imageUrl: string, chatId: number) {
 }
 
 // 🧠 Fallback for plain text
-async function extractFromText(rawText: string, chatId: number) {
+async function extractFromText(rawText: string, chatId: number, message: any) {
   try {
     const res = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: 'You extract deposit transactions from raw receipt text.' },
         { role: 'user', content: `${transactionPrompt}\n\n${rawText}` }
@@ -150,14 +156,19 @@ async function extractFromText(rawText: string, chatId: number) {
     });
 
     const content = res.choices[0].message.content?.trim();
+    console.log("OCR result:", content); // Log the OCR result
+
     const parsed = content ? extractJSON(content) : null;
     if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) return { success: false };
+
+    const sentDate = new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000)
+      .toISOString().slice(0, 10);
 
     const data = Array.isArray(parsed) ? parsed : [parsed];
     const mappedData = data.map(d => ({
       ...d,
       source: 'telegram',
-      date: d.date && d.date.trim() !== "" ? d.date : null,
+      date: d.date && d.date.trim() !== "" ? d.date : sentDate, // Fill with sent date if missing
     }));
     const { error } = await supabase.from('transactions').insert(mappedData);
 
