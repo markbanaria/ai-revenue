@@ -29,7 +29,8 @@ Only return valid structured JSON. Some info might not be available in the recei
 const sessions: Record<number, {
   data: any,
   missingFields: string[],
-  lastActive: number
+  lastActive: number,
+  lastMissingField?: string
 }> = {};
 
 const REQUIRED_FIELDS = ['store_id', 'type', 'amount', 'date', 'source', 'reference', 'sender'];
@@ -256,8 +257,17 @@ export async function POST(req: NextRequest) {
     } else if (aiResult.action === 'missing') {
       session.data = aiResult.data;
       session.missingFields = aiResult.missingFields || [];
-      await sendTelegram(chatId, `Some fields are still missing. Please provide "${session.missingFields[0]}":`);
+      // Prevent infinite loop: if the same field is missing again, break and notify user
+      if (
+        session.missingFields.length === 1 &&
+        session.lastMissingField === session.missingFields[0]
+      ) {
+        await sendTelegram(chatId, `⚠️ Still missing "${session.missingFields[0]}". Please check your input or type 'skip' to continue.`);
+      } else {
+        await sendTelegram(chatId, `Some fields are still missing. Please provide "${session.missingFields[0]}":`);
+      }
       session.lastActive = Date.now();
+      session.lastMissingField = session.missingFields[0]; // Track last missing field
       return NextResponse.json({ ok: true });
     }
   }
@@ -296,7 +306,7 @@ export async function POST(req: NextRequest) {
     await sendTelegram(chatId, `✅ Please confirm the details:\n${summarize(baseData)}\n\nReply 'confirm' to upload or 'change field:value, ...' to edit.`);
   } else if (completion === 'incomplete') {
     const missingFields = REQUIRED_FIELDS.filter(f => !baseData[f] || baseData[f] === 'unknown' || baseData[f] === '');
-    sessions[chatId] = { data: baseData, missingFields, lastActive: Date.now() };
+    sessions[chatId] = { data: baseData, missingFields, lastActive: Date.now(), lastMissingField: missingFields[0] };
     await sendTelegram(chatId, `Some fields are missing. Please provide "${missingFields[0]}":`);
   }
 
