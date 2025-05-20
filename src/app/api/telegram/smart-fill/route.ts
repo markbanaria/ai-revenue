@@ -69,12 +69,17 @@ export async function POST(req: NextRequest) {
   const chatId = message.chat.id;
   if (!chatHistories[chatId]) chatHistories[chatId] = [];
 
-  // Add user message to history
-  if (message.text) {
-    chatHistories[chatId].push({ role: 'user', content: message.text });
-  } else if (message.photo) {
-    // For images, just add a placeholder (or you can implement OCR/image-to-text if needed)
+  // If no image has been sent yet, prompt the user for an image
+  if (!message.photo && chatHistories[chatId].length === 0) {
+    await sendTelegram(chatId, "📷 Please send a photo of the receipt to begin.");
+    return NextResponse.json({ ok: true });
+  }
+
+  // Only add to chat history and start AI conversation after an image is received
+  if (message.photo) {
     chatHistories[chatId].push({ role: 'user', content: '[Photo of receipt attached]' });
+  } else if (message.text) {
+    chatHistories[chatId].push({ role: 'user', content: message.text });
   }
 
   // Compose AI prompt with full chat history
