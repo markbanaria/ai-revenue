@@ -22,7 +22,7 @@ Extract the money transaction and return this schema:
   sender: string
 }
 
-Only return valid structured JSON. If no transaction can be found, return an empty array [].
+Only return valid structured JSON. Some info might not be available in the receipt but as long as there is an amount, you have to return the json. then fill the rest of the avaiable. otherwise leave as unknown.
 `;
 
 export async function POST(req: NextRequest) {
