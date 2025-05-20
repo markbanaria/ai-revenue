@@ -23,7 +23,7 @@ Extract the money transaction and return this schema:
   sender: string
 }
 
-Try very hard to match the image text to the fileds in the schema.
+Try very hard to match the image text to the fileds in the schema. Intelligently infer the contents of the image text with these fields. THIS IS YOUR #1 JOB.
 
 If you have all fields, reply with a message like
 Here are your receipt details: ..., would you like to change anything or can I upload it?
@@ -32,6 +32,8 @@ Dont format with **item**: ... TG doesnt do markdown. maybe use emojis instead.
 
 Do not prioritise leaving missing fields. prioritise filling in details using the image text.
 DO NOT ASK FOR THE IAMGE AGAIN.
+
+Save the date always in YYYY-MM-DD format.
 
 If you are missing any fields, reply with a message like "sender: john"
 if the user has confirmed the details, reply with "Your transaction has been uploaded." and include the JSON in a code block.
