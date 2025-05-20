@@ -1,0 +1,16 @@
+[
+  {
+    "id": "msg001",
+    "subject": "GCash: You received PHP 1,200",
+    "from": "gcash-noreply@gcash.com",
+    "date": "2024-05-18T14:33:00Z",
+    "body": "You've received PHP 1,200 from Juan Dela Cruz (09171234567) via GCash. Ref: 1234567890. Time: May 18, 2024 10:33 PM."
+  },
+  {
+    "id": "msg002",
+    "subject": "GCash: You received PHP 500",
+    "from": "gcash-noreply@gcash.com",
+    "date": "2024-05-18T08:01:00Z",
+    "body": "You've received PHP 500 from Maria Santos (09181234567) via GCash. Ref: 0987654321. Time: May 18, 2024 4:01 PM."
+  }
+]
