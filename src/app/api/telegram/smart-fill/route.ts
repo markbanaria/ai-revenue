@@ -23,7 +23,7 @@ Extract the money transaction and return this schema:
   sender: string
 }
 
-If you have all fields, reply with a message like "Your transaction has been uploaded." and include the JSON in a code block. If not, ask the user for the missing info conversationally. Always keep the conversation natural and friendly. Only include the JSON when all fields are filled.
+If you have all fields, reply with a message like "Your transaction has been uploaded." and include the JSON in a code block. If not, ask the user for the missing info conversationally. You can mention all the missing fields, but then right after, ask it for just one field. eg. sender and amount still missing, first can you send the sender? Always keep the conversation natural and friendly. Only include the JSON when all fields are filled.
 `;
 
 const REQUIRED_FIELDS = ['store_id', 'type', 'amount', 'date', 'source', 'reference', 'sender'];
@@ -78,6 +78,19 @@ export async function POST(req: NextRequest) {
   // Only add to chat history and start AI conversation after an image is received
   if (message.photo) {
     chatHistories[chatId].push({ role: 'user', content: '[Photo of receipt attached]' });
+
+    // If this is the first message (after photo), pre-fill known fields
+    if (chatHistories[chatId].length === 1) {
+      const prefilled = {
+        type: "cash",
+        source: "telegram"
+        // You can add more fields if you can infer them
+      };
+      chatHistories[chatId].push({
+        role: 'assistant',
+        content: `Here is the data I already know:\n\`\`\`json\n${JSON.stringify(prefilled, null, 2)}\n\`\`\`\nPlease extract the remaining fields from the receipt or ask the user for them.`
+      });
+    }
   } else if (message.text) {
     chatHistories[chatId].push({ role: 'user', content: message.text });
   }
