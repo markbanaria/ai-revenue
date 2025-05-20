@@ -120,6 +120,7 @@ async function extractFromImage(imageUrl: string, chatId: number) {
       ...d,
       store_id: storeId,
       source: 'telegram',
+      date: d.date && d.date.trim() !== "" ? d.date : null,
     }));
 
     const { error } = await supabase.from('transactions').insert(data);
@@ -153,13 +154,12 @@ async function extractFromText(rawText: string, chatId: number) {
     if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) return { success: false };
 
     const data = Array.isArray(parsed) ? parsed : [parsed];
-
-    const { error } = await supabase.from('transactions').insert(
-      data.map(d => ({
-        ...d,
-        source: 'telegram',
-      }))
-    );
+    const mappedData = data.map(d => ({
+      ...d,
+      source: 'telegram',
+      date: d.date && d.date.trim() !== "" ? d.date : null,
+    }));
+    const { error } = await supabase.from('transactions').insert(mappedData);
 
     if (error) {
       console.error("Insert error:", error);
