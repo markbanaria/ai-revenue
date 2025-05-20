@@ -105,11 +105,50 @@ async function extractFromImage(imageUrl: string, chatId: number, message: any) 
       max_tokens: 1000,
     });
 
-    const content = result.choices[0].message.content?.trim();
-    console.log("OCR result:", content); // Log the OCR result
+    // Log the full AI response for monitoring
+    console.log("Full OpenAI response:", JSON.stringify(result, null, 2));
 
-    const parsed = content ? extractJSON(content) : null;
-    if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) return { success: false };
+    const content = result.choices[0].message.content?.trim();
+    console.log("OCR result (raw content):", content);
+
+    let parsed = content ? extractJSON(content) : null;
+    console.log("Parsed JSON from OCR:", parsed);
+
+    // Fallback: Try to extract a total amount if parsing failed or amount is missing
+    if (
+      !parsed ||
+      (Array.isArray(parsed) && parsed.length === 0) ||
+      (typeof parsed === "object" && parsed !== null && !parsed.amount)
+    ) {
+      // Try to extract a number that looks like a total amount from the raw content
+      const amountMatch = content?.match(/(?:total|amount)[^\d]{0,10}([\d,]+(?:\.\d{2})?)/i) ||
+                          content?.match(/([\d,]+(?:\.\d{2})?)/);
+      const amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, "")) : null;
+
+      if (amount) {
+        const sentDate = new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000)
+          .toISOString().slice(0, 10);
+
+        const fallbackData = [{
+          store_id: "store_unknown",
+          type: "cash",
+          amount,
+          date: sentDate,
+          source: "telegram",
+          reference: "",
+          sender: ""
+        }];
+
+        const { error } = await supabase.from('transactions').insert(fallbackData);
+        if (error) {
+          console.error("Insert error (fallback):", error);
+          return { success: false };
+        }
+        return { success: true };
+      }
+
+      return { success: false };
+    }
 
     const STORE_MAP: Record<number, string> = {
       123456789: 'store_001',
