@@ -276,16 +276,18 @@ export async function POST(req: NextRequest) {
   }
 
   const completion = classifyCompletion(parsed.data);
+  const baseData: any = {};
+  for (const field of REQUIRED_FIELDS) {
+    baseData[field] = parsed.data[field] ?? '';
+  }
   if (completion === 'blank') {
     await sendTelegram(chatId, "⚠️ No valid data found, please resend the image.");
   } else if (completion === 'complete') {
-    // Go to confirmation
-    sessions[chatId] = { data: parsed.data, missingFields: [], lastActive: Date.now() };
-    await sendTelegram(chatId, `✅ Please confirm the details:\n${summarize(parsed.data)}\n\nReply 'confirm' to upload or 'change field:value, ...' to edit.`);
+    sessions[chatId] = { data: baseData, missingFields: [], lastActive: Date.now() };
+    await sendTelegram(chatId, `✅ Please confirm the details:\n${summarize(baseData)}\n\nReply 'confirm' to upload or 'change field:value, ...' to edit.`);
   } else if (completion === 'incomplete') {
-    // Ask for missing fields one by one
-    const missingFields = REQUIRED_FIELDS.filter(f => !parsed.data[f] || parsed.data[f] === 'unknown' || parsed.data[f] === '');
-    sessions[chatId] = { data: parsed.data, missingFields, lastActive: Date.now() };
+    const missingFields = REQUIRED_FIELDS.filter(f => !baseData[f] || baseData[f] === 'unknown' || baseData[f] === '');
+    sessions[chatId] = { data: baseData, missingFields, lastActive: Date.now() };
     await sendTelegram(chatId, `Some fields are missing. Please provide "${missingFields[0]}":`);
   }
 
