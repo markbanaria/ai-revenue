@@ -204,8 +204,10 @@ export async function POST(req: NextRequest) {
     if (session.missingFields.length > 0) {
       const field = session.missingFields[0];
       session.data[field] = message.text.trim();
-      session.missingFields.shift();
       session.lastActive = Date.now();
+
+      // Recalculate missing fields after update
+      session.missingFields = REQUIRED_FIELDS.filter(f => !session.data[f] || session.data[f] === 'unknown' || session.data[f] === '');
 
       if (session.missingFields.length === 0) {
         // All fields filled, go to confirmation
