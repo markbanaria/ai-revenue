@@ -88,7 +88,7 @@ function extractJSON(content: string): any | null {
 async function extractFromImage(imageUrl: string, chatId: number) {
   try {
     const result = await openai.chat.completions.create({
-      model: 'gpt-4-vision-preview',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
