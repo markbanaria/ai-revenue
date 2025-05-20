@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { OpenAI } from 'openai';
 import { createClient } from '@supabase/supabase-js';
 
@@ -25,7 +25,7 @@ Extract the money transaction and return this schema:
 Only return valid structured JSON. If no transaction can be found, return an empty array [].
 `;
 
-export async function POST(req: { json: () => any }) {
+export async function POST(req: NextRequest) {
   const body = await req.json();
   const message = body.message;
   if (!message) return NextResponse.json({ ok: true });
