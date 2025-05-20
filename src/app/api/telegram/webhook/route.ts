@@ -66,7 +66,25 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-// 🧠 Extract from Telegram image using OpenAI Vision
+function extractJSON(content: string): any | null {
+  const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const jsonString = codeBlockMatch ? codeBlockMatch[1] : content;
+
+  try {
+    return JSON.parse(jsonString);
+  } catch {
+    const curlyMatch = jsonString.match(/{[\s\S]*}/);
+    const arrayMatch = jsonString.match(/\[[\s\S]*\]/);
+    const match = curlyMatch || arrayMatch;
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {}
+    }
+    return null;
+  }
+}
+
 async function extractFromImage(imageUrl: string, chatId: number) {
   try {
     const result = await openai.chat.completions.create({
@@ -88,10 +106,9 @@ async function extractFromImage(imageUrl: string, chatId: number) {
     });
 
     const content = result.choices[0].message.content?.trim();
-    if (!content || content === '[]') return { success: false };
+    const parsed = content ? extractJSON(content) : null;
+    if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) return { success: false };
 
-    const parsed = JSON.parse(content);
-    
     const STORE_MAP: Record<number, string> = {
       123456789: 'store_001',
       987654321: 'store_002',
@@ -132,9 +149,9 @@ async function extractFromText(rawText: string, chatId: number) {
     });
 
     const content = res.choices[0].message.content?.trim();
-    if (!content || content === '[]') return { success: false };
+    const parsed = content ? extractJSON(content) : null;
+    if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) return { success: false };
 
-    const parsed = JSON.parse(content);
     const data = Array.isArray(parsed) ? parsed : [parsed];
 
     const { error } = await supabase.from('transactions').insert(
