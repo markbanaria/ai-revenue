@@ -25,45 +25,25 @@ Extract the money transaction and return this schema:
 Only return valid structured JSON. Some info might not be available in the receipt but as long as there is an amount, you have to return the json. then fill the rest of the avaiable. otherwise leave as unknown.
 `;
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const message = body.message;
-  if (!message) return NextResponse.json({ ok: true });
+// In-memory session store (cleared on server restart)
+const sessions: Record<number, {
+  data: any,
+  missingFields: string[],
+  lastActive: number
+}> = {};
 
-  const chatId = message.chat.id;
+const REQUIRED_FIELDS = ['store_id', 'type', 'amount', 'date', 'source', 'reference', 'sender'];
 
-  if (message.photo) {
-    const fileId = message.photo.at(-1).file_id;
+function classifyCompletion(data: any): 'complete' | 'incomplete' | 'blank' {
+  if (!data) return 'blank';
+  const missing = REQUIRED_FIELDS.filter(f => !data[f] || data[f] === 'unknown' || data[f] === '');
+  if (missing.length === 0) return 'complete';
+  if (missing.length === REQUIRED_FIELDS.length) return 'blank';
+  return 'incomplete';
+}
 
-    // Step 1: Get Telegram file URL
-    const fileResp = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
-    const fileData = await fileResp.json();
-    const filePath = fileData.result?.file_path;
-    const telegramFileURL = `https://api.telegram.org/file/bot${process.env.TELEGRAM_TOKEN}/${filePath}`;
-
-    // Step 2: Send image to OpenAI Vision
-    const parsed = await extractFromImage(telegramFileURL, chatId, message);
-
-    if (parsed.success) {
-      await sendTelegram(chatId, "✅ Your receipt is valid.");
-    } else {
-      await sendTelegram(chatId, "⚠️ Your receipt was not read, please resend it.");
-    }
-
-  } else if (message.text) {
-    const parsed = await extractFromText(message.text, chatId, message);
-
-    if (parsed.success) {
-      await sendTelegram(chatId, "✅ Your receipt is valid.");
-    } else {
-      await sendTelegram(chatId, "⚠️ Your receipt was not read, please resend it.");
-    }
-
-  } else {
-    await sendTelegram(chatId, "📷 No receipt detected.");
-  }
-
-  return NextResponse.json({ ok: true });
+function summarize(data: any): string {
+  return REQUIRED_FIELDS.map(k => `${k}: ${data[k] ?? ''}`).join('\n');
 }
 
 function extractJSON(content: string): any | null {
@@ -105,14 +85,8 @@ async function extractFromImage(imageUrl: string, chatId: number, message: any) 
       max_tokens: 1000,
     });
 
-    // Log the full AI response for monitoring
-    console.log("Full OpenAI response:", JSON.stringify(result, null, 2));
-
     const content = result.choices[0].message.content?.trim();
-    console.log("OCR result (raw content):", content);
-
     let parsed = content ? extractJSON(content) : null;
-    console.log("Parsed JSON from OCR:", parsed);
 
     // Fallback: Try to extract a total amount if parsing failed or amount is missing
     if (
@@ -120,7 +94,6 @@ async function extractFromImage(imageUrl: string, chatId: number, message: any) 
       (Array.isArray(parsed) && parsed.length === 0) ||
       (typeof parsed === "object" && parsed !== null && !parsed.amount)
     ) {
-      // Try to extract a number that looks like a total amount from the raw content
       const amountMatch = content?.match(/(?:total|amount)[^\d]{0,10}([\d,]+(?:\.\d{2})?)/i) ||
                           content?.match(/([\d,]+(?:\.\d{2})?)/);
       const amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, "")) : null;
@@ -129,60 +102,44 @@ async function extractFromImage(imageUrl: string, chatId: number, message: any) 
         const sentDate = new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000)
           .toISOString().slice(0, 10);
 
-        const fallbackData = [{
-          store_id: "store_unknown",
-          type: "cash",
-          amount,
-          date: sentDate,
-          source: "telegram",
-          reference: "",
-          sender: ""
-        }];
-
-        const { error } = await supabase.from('transactions').insert(fallbackData);
-        if (error) {
-          console.error("Insert error (fallback):", error);
-          return { success: false };
-        }
-        return { success: true };
+        return {
+          data: {
+            store_id: "store_unknown",
+            type: "cash",
+            amount,
+            date: sentDate,
+            source: "telegram",
+            reference: "",
+            sender: ""
+          }
+        };
       }
-
-      return { success: false };
+      return { data: null };
     }
 
     const STORE_MAP: Record<number, string> = {
       123456789: 'store_001',
       987654321: 'store_002',
     };
-
     const storeId = STORE_MAP[chatId] || 'store_unknown';
-
-    // Get message date in YYYY-MM-DD format
     const sentDate = new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000)
       .toISOString().slice(0, 10);
 
-    const data = (Array.isArray(parsed) ? parsed : [parsed]).map(d => ({
-      ...d,
-      store_id: storeId,
-      source: 'telegram',
-      date: d.date && d.date.trim() !== "" ? d.date : sentDate, // Fill with sent date if missing
-    }));
-
-    const { error } = await supabase.from('transactions').insert(data);
-    if (error) {
-      console.error("Insert error:", error);
-      return { success: false };
-    }
-
-    return { success: true };
-
+    const d = Array.isArray(parsed) ? parsed[0] : parsed;
+    return {
+      data: {
+        ...d,
+        store_id: String(chatId),
+        source: 'telegram',
+        date: d.date && d.date.trim() !== "" ? d.date : sentDate,
+      }
+    };
   } catch (err) {
     console.error("Image extraction failed:", err);
-    return { success: false };
+    return { data: null };
   }
 }
 
-// 🧠 Fallback for plain text
 async function extractFromText(rawText: string, chatId: number, message: any) {
   try {
     const res = await openai.chat.completions.create({
@@ -195,35 +152,26 @@ async function extractFromText(rawText: string, chatId: number, message: any) {
     });
 
     const content = res.choices[0].message.content?.trim();
-    console.log("OCR result:", content); // Log the OCR result
-
     const parsed = content ? extractJSON(content) : null;
-    if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) return { success: false };
+    if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) return { data: null };
 
     const sentDate = new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000)
       .toISOString().slice(0, 10);
 
-    const data = Array.isArray(parsed) ? parsed : [parsed];
-    const mappedData = data.map(d => ({
-      ...d,
-      source: 'telegram',
-      date: d.date && d.date.trim() !== "" ? d.date : sentDate, // Fill with sent date if missing
-    }));
-    const { error } = await supabase.from('transactions').insert(mappedData);
-
-    if (error) {
-      console.error("Insert error:", error);
-      return { success: false };
-    }
-
-    return { success: true };
+    const d = Array.isArray(parsed) ? parsed[0] : parsed;
+    return {
+      data: {
+        ...d,
+        source: 'telegram',
+        date: d.date && d.date.trim() !== "" ? d.date : sentDate,
+      }
+    };
   } catch (err) {
     console.error("Text extraction failed:", err);
-    return { success: false };
+    return { data: null };
   }
 }
 
-// 📡 Send reply to Telegram
 async function sendTelegram(chatId: number, text: string) {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: 'POST',
@@ -233,4 +181,102 @@ async function sendTelegram(chatId: number, text: string) {
       text,
     }),
   });
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const message = body.message;
+  if (!message) return NextResponse.json({ ok: true });
+
+  const chatId = message.chat.id;
+
+  // Timeout check
+  if (sessions[chatId] && Date.now() - sessions[chatId].lastActive > 5 * 60 * 1000) {
+    delete sessions[chatId];
+    await sendTelegram(chatId, "⏰ Your session has timed out, you will need to resend the image.");
+    return NextResponse.json({ ok: true });
+  }
+
+  // If user is in a session and replying to a missing field or confirmation
+  if (sessions[chatId] && message.text) {
+    const session = sessions[chatId];
+    // If waiting for missing fields
+    if (session.missingFields.length > 0) {
+      const field = session.missingFields[0];
+      session.data[field] = message.text.trim();
+      session.missingFields.shift();
+      session.lastActive = Date.now();
+
+      if (session.missingFields.length === 0) {
+        // All fields filled, go to confirmation
+        await sendTelegram(chatId, `✅ Please confirm the details:\n${summarize(session.data)}\n\nReply 'confirm' to upload or 'change field:value, ...' to edit.`);
+      } else {
+        // Ask next missing field
+        await sendTelegram(chatId, `Please provide "${session.missingFields[0]}":`);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    // If waiting for confirmation or change
+    if (/^confirm$/i.test(message.text.trim())) {
+      // Upload to DB
+      const { error } = await supabase.from('transactions').insert([session.data]);
+      delete sessions[chatId];
+      if (error) {
+        await sendTelegram(chatId, "❌ Upload failed. Please try again.");
+      } else {
+        await sendTelegram(chatId, "🎉 Uploaded successfully!");
+      }
+      return NextResponse.json({ ok: true });
+    } else if (/^change\s+(.+)/i.test(message.text.trim())) {
+      // Parse changes
+      const changes = message.text.replace(/^change\s+/i, '').split(',').map((s: string) => s.trim());
+      for (const change of changes) {
+        const [field, ...rest] = change.split(':');
+        if (field && rest.length && REQUIRED_FIELDS.includes(field.trim())) {
+          session.data[field.trim()] = rest.join(':').trim();
+        }
+      }
+      await sendTelegram(chatId, `🔄 Updated. Please confirm the details:\n${summarize(session.data)}\n\nReply 'confirm' to upload or 'change field:value, ...' to edit.`);
+      session.lastActive = Date.now();
+      return NextResponse.json({ ok: true });
+    }
+  }
+
+  // New image or text
+  let parsed;
+  if (message.photo) {
+    const fileId = message.photo.at(-1).file_id;
+    const fileResp = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
+    const fileData = await fileResp.json();
+    const filePath = fileData.result?.file_path;
+    const telegramFileURL = `https://api.telegram.org/file/bot${process.env.TELEGRAM_TOKEN}/${filePath}`;
+    parsed = await extractFromImage(telegramFileURL, chatId, message);
+  } else if (message.text) {
+    parsed = await extractFromText(message.text, chatId, message);
+  } else {
+    await sendTelegram(chatId, "📷 No receipt detected.");
+    return NextResponse.json({ ok: true });
+  }
+
+  // Classify and branch
+  if (!parsed || !parsed.data) {
+    await sendTelegram(chatId, "⚠️ Your receipt was not read, please resend it.");
+    return NextResponse.json({ ok: true });
+  }
+
+  const completion = classifyCompletion(parsed.data);
+  if (completion === 'blank') {
+    await sendTelegram(chatId, "⚠️ No valid data found, please resend the image.");
+  } else if (completion === 'complete') {
+    // Go to confirmation
+    sessions[chatId] = { data: parsed.data, missingFields: [], lastActive: Date.now() };
+    await sendTelegram(chatId, `✅ Please confirm the details:\n${summarize(parsed.data)}\n\nReply 'confirm' to upload or 'change field:value, ...' to edit.`);
+  } else if (completion === 'incomplete') {
+    // Ask for missing fields one by one
+    const missingFields = REQUIRED_FIELDS.filter(f => !parsed.data[f] || parsed.data[f] === 'unknown' || parsed.data[f] === '');
+    sessions[chatId] = { data: parsed.data, missingFields, lastActive: Date.now() };
+    await sendTelegram(chatId, `Some fields are missing. Please provide "${missingFields[0]}":`);
+  }
+
+  return NextResponse.json({ ok: true });
 }
