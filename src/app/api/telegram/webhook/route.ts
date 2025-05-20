@@ -200,6 +200,7 @@ export async function POST(req: NextRequest) {
   // If user is in a session and replying to a missing field or confirmation
   if (sessions[chatId] && message.text) {
     const session = sessions[chatId];
+
     // If waiting for missing fields
     if (session.missingFields.length > 0) {
       const field = session.missingFields[0];
@@ -218,6 +219,7 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ ok: true });
     }
+
     // If waiting for confirmation or change
     if (/^confirm$/i.test(message.text.trim())) {
       // Upload to DB
@@ -238,7 +240,14 @@ export async function POST(req: NextRequest) {
           session.data[field.trim()] = rest.join(':').trim();
         }
       }
-      await sendTelegram(chatId, `🔄 Updated. Please confirm the details:\n${summarize(session.data)}\n\nReply 'confirm' to upload or 'change field:value, ...' to edit.`);
+      // Recalculate missing fields after change
+      session.missingFields = REQUIRED_FIELDS.filter(f => !session.data[f] || session.data[f] === 'unknown' || session.data[f] === '');
+
+      if (session.missingFields.length === 0) {
+        await sendTelegram(chatId, `✅ Please confirm the details:\n${summarize(session.data)}\n\nReply 'confirm' to upload or 'change field:value, ...' to edit.`);
+      } else {
+        await sendTelegram(chatId, `Some fields are still missing. Please provide "${session.missingFields[0]}":`);
+      }
       session.lastActive = Date.now();
       return NextResponse.json({ ok: true });
     }
