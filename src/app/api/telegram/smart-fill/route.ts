@@ -23,11 +23,14 @@ Extract the money transaction and return this schema:
   sender: string
 }
 
+Try very hard to match the image text to the fileds in the schema.
+
 If you have all fields, reply with a message like
 Here are your receipt details: ..., would you like to change anything or can I upload it?
 If you are missing any fields, reply with a message like "sender: john"
 if the user has confirmed the details, reply with "Your transaction has been uploaded." and include the JSON in a code block.
 "Your transaction has been uploaded." and include the JSON in a code block. 
+
 If not, ask the user for the missing info conversationally. 
 You should mention all the missing fields, but then right after, ask it for just one field. 
 eg. sender and amount still missing, first can you send the sender?
