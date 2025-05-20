@@ -107,6 +107,9 @@ export async function POST(req: NextRequest) {
   ];
 
   if (message.photo) {
+    // Refresh the whole thread: clear chat history for this chat when a new image is sent
+    chatHistories[chatId] = [];
+
     // Get the highest resolution photo
     const photo = message.photo[message.photo.length - 1];
     const imageUrl = await getTelegramPhotoUrl(photo.file_id);
@@ -131,13 +134,13 @@ export async function POST(req: NextRequest) {
         ]
       }
     );
+    // Store only the conversation (not the system prompt) for future turns
     chatHistories[chatId] = aiMessages.slice(1)
       .filter(
         (msg): msg is { role: 'user' | 'assistant'; content: any } =>
           (msg.role === 'user' || msg.role === 'assistant')
       )
       .map(msg => ({ role: msg.role, content: msg.content }));
-    // Store only the conversation, not the system prompt
   } else if (message.text) {
     chatHistories[chatId].push({ role: 'user', content: message.text });
     aiMessages = aiMessages.concat(chatHistories[chatId]);
