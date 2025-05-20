@@ -183,6 +183,38 @@ async function sendTelegram(chatId: number, text: string) {
   });
 }
 
+async function handleConfirmationAI(
+  userInput: string,
+  sessionData: any,
+  requiredFields: string[]
+): Promise<{ action: 'confirm' | 'change' | 'missing', data: any, missingFields?: string[] }> {
+  const prompt = `
+You are an assistant helping users confirm or edit transaction data. 
+Given the current data and the user's reply, return one of:
+- If the user says "confirm" and all required fields are present, reply with: {"action":"confirm","data":{...}}
+- If the user says "change field:value, ..." update the fields and reply with: {"action":"change","data":{...}}
+- If after changes, some required fields are missing or unknown, reply with: {"action":"missing","data":{...}, "missingFields":["field1", ...]}
+
+Required fields: ${requiredFields.join(', ')}
+Current data: ${JSON.stringify(sessionData)}
+User reply: ${userInput}
+Respond ONLY with valid JSON as described above.
+`;
+
+  const res = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: 'You are a strict JSON API.' },
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0,
+    max_tokens: 500,
+  });
+
+  const content = res.choices[0].message.content?.trim();
+  return extractJSON(content ?? "");
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const message = body.message;
@@ -200,30 +232,10 @@ export async function POST(req: NextRequest) {
   // If user is in a session and replying to a missing field or confirmation
   if (sessions[chatId] && message.text) {
     const session = sessions[chatId];
+    const aiResult = await handleConfirmationAI(message.text.trim(), session.data, REQUIRED_FIELDS);
 
-    // If waiting for missing fields
-    if (session.missingFields.length > 0) {
-      const field = session.missingFields[0];
-      session.data[field] = message.text.trim();
-      session.lastActive = Date.now();
-
-      // Recalculate missing fields after update
-      session.missingFields = REQUIRED_FIELDS.filter(f => !session.data[f] || session.data[f] === 'unknown' || session.data[f] === '');
-
-      if (session.missingFields.length === 0) {
-        // All fields filled, go to confirmation
-        await sendTelegram(chatId, `✅ Please confirm the details:\n${summarize(session.data)}\n\nReply 'confirm' to upload or 'change field:value, ...' to edit.`);
-      } else {
-        // Ask next missing field
-        await sendTelegram(chatId, `Please provide "${session.missingFields[0]}":`);
-      }
-      return NextResponse.json({ ok: true });
-    }
-
-    // If waiting for confirmation or change
-    if (/^confirm$/i.test(message.text.trim())) {
-      // Upload to DB
-      const { error } = await supabase.from('transactions').insert([session.data]);
+    if (aiResult.action === 'confirm') {
+      const { error } = await supabase.from('transactions').insert([aiResult.data]);
       delete sessions[chatId];
       if (error) {
         await sendTelegram(chatId, "❌ Upload failed. Please try again.");
@@ -231,23 +243,20 @@ export async function POST(req: NextRequest) {
         await sendTelegram(chatId, "🎉 Uploaded successfully!");
       }
       return NextResponse.json({ ok: true });
-    } else if (/^change\s+(.+)/i.test(message.text.trim())) {
-      // Parse changes
-      const changes = message.text.replace(/^change\s+/i, '').split(',').map((s: string) => s.trim());
-      for (const change of changes) {
-        const [field, ...rest] = change.split(':');
-        if (field && rest.length && REQUIRED_FIELDS.includes(field.trim())) {
-          session.data[field.trim()] = rest.join(':').trim();
-        }
-      }
-      // Recalculate missing fields after change
+    } else if (aiResult.action === 'change') {
+      session.data = aiResult.data;
       session.missingFields = REQUIRED_FIELDS.filter(f => !session.data[f] || session.data[f] === 'unknown' || session.data[f] === '');
-
       if (session.missingFields.length === 0) {
         await sendTelegram(chatId, `✅ Please confirm the details:\n${summarize(session.data)}\n\nReply 'confirm' to upload or 'change field:value, ...' to edit.`);
       } else {
         await sendTelegram(chatId, `Some fields are still missing. Please provide "${session.missingFields[0]}":`);
       }
+      session.lastActive = Date.now();
+      return NextResponse.json({ ok: true });
+    } else if (aiResult.action === 'missing') {
+      session.data = aiResult.data;
+      session.missingFields = aiResult.missingFields || [];
+      await sendTelegram(chatId, `Some fields are still missing. Please provide "${session.missingFields[0]}":`);
       session.lastActive = Date.now();
       return NextResponse.json({ ok: true });
     }
