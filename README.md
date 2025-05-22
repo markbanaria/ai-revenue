@@ -34,3 +34,21 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+to initiate database:
+```
+CREATE TABLE IF NOT EXISTS transactions (
+  id SERIAL PRIMARY KEY,
+  store_id TEXT,
+  type TEXT,
+  amount NUMERIC,
+  date TIMESTAMP,
+  source TEXT,
+  reference TEXT,
+  sender TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+```
+create extension if not exists pg_execute_sql;
+```
