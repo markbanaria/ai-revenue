@@ -131,6 +131,36 @@ export async function POST(req: NextRequest) {
     message.chat?.id ||
     (message.chat && typeof message.chat === 'object' && message.chat.id);
 
+  // --- Register command handler ---
+  if (message.text && message.text.startsWith('/register')) {
+    const storeName = message.text.replace('/register', '').trim();
+    if (!storeName) {
+      await sendTelegram(chatId, "❗ Please provide a store name. Usage: /register <store name>");
+      return NextResponse.json({ ok: true });
+    }
+
+    // Insert into stores table
+    const { data, error } = await supabase
+      .from('stores')
+      .insert([
+        {
+          created_at: TODAY_UTC,
+          store_name: storeName,
+          telegram_id: telegramUserId,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      await sendTelegram(chatId, `❌ Registration failed: ${error.message}`);
+    } else {
+      await sendTelegram(chatId, `✅ Store "${storeName}" registered!`);
+    }
+    return NextResponse.json({ ok: true });
+  }
+  // --- End register command handler ---
+
   if (!chatHistories[chatId]) chatHistories[chatId] = [];
 
   if (!message.photo && chatHistories[chatId].length === 0) {
@@ -210,7 +240,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (storeError || !storeData) {
-      await sendTelegram(chatId, "❌ Could not find your store. Please contact support.");
+      await sendTelegram(
+        chatId,
+        "❌ Store not found. Please register your store first by typing:\n/register <store name>"
+      );
       return NextResponse.json({ ok: false });
     }
     parsed.store_id = storeData.id;
