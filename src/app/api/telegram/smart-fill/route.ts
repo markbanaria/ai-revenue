@@ -38,8 +38,6 @@ Data Validation Rules
 - The "date" field must be formatted as YYYY-MM-DDTHH:mm:ssZ (ISO 8601, UTC) and must not be after ${TODAY_UTC}.
 - The "type" field should always be "cash".
 - The "source" field is always "telegram".
-- The "sender_id" must be filled with the Telegram user ID.
-- The "sender" field (if present in the schema) should be filled with either the name found in the deposit slip or, if not available, the Telegram user ID.
 - "created_at" and "deleted_at" can be left blank or null for the backend to fill.
 - All fields except "id", "created_at", and "deleted_at" are required and must not be empty.
 
@@ -74,7 +72,6 @@ Guardrails (What the AI Must NOT Do)
 `;
 
 const REQUIRED_FIELDS = [
-  // 'store_id', // <-- remove this
   'type',
   'amount',
   'date',
@@ -199,18 +196,13 @@ export async function POST(req: NextRequest) {
 
   const parsed = extractJSON(aiReply);
 
-  // Log when JSON is detected
-  if (parsed) {
+  if (parsed && REQUIRED_FIELDS.every(f => parsed[f] !== undefined && parsed[f] !== '' && parsed[f] !== 'unknown')) {
     console.log("Detected JSON from AI reply:", parsed);
-  }
-
-  // Fill sender_id with Telegram user ID if missing or empty
-  if (parsed) {
+    parsed.created_at = TODAY_UTC;
     const telegramUserId =
       message.from?.id ||
       message.chat?.id ||
       (message.chat && typeof message.chat === 'object' && message.chat.id);
-    parsed.created_at = TODAY_UTC;
     const { data: storeData, error: storeError } = await supabase
       .from('stores')
       .select('id')
@@ -222,9 +214,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false });
     }
     parsed.store_id = storeData.id;
-  }
+    console.log("Store ID found:", parsed.store_id);
 
-  if (parsed && REQUIRED_FIELDS.every(f => parsed[f] !== undefined && parsed[f] !== '' && parsed[f] !== 'unknown')) {
+
     // Upload to DB
     const { data, error } = await supabase.from('transactions').insert([parsed]);
     console.log("Supabase insert result:", { data, error }); // <-- log result
