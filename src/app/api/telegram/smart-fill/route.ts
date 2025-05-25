@@ -29,7 +29,7 @@ Output Schema (JSON)
   "store_id": "string",
   "type": "cash",
   "amount": "number",
-  "date": "string (YYYY-MM-DDTHH:mm:ssZ, ISO 8601, must not be in the future)",
+  "date": "string (YYYY-MM-DDTHH:mm:ssZ, ISO 8601, must not be in the after ${TODAY_UTC})",
   "source": "telegram",
   "reference": "string",
   "sender_id": "string (Telegram user ID)",
@@ -38,7 +38,7 @@ Output Schema (JSON)
 }
 
 Data Validation Rules
-- The "date" field must be formatted as YYYY-MM-DDTHH:mm:ssZ (ISO 8601, UTC) and must not be in the future.
+- The "date" field must be formatted as YYYY-MM-DDTHH:mm:ssZ (ISO 8601, UTC) and must not be after ${TODAY_UTC}.
 - The "type" field should always be "cash".
 - The "source" field is always "telegram".
 - The "sender_id" must be filled with the Telegram user ID.
@@ -49,7 +49,6 @@ Data Validation Rules
 Task Instructions
 - Extract and fill all fields from the receipt text.
 - Prioritize filling all fields—avoid missing values if you can infer them.
-- Format the date strictly as YYYY-MM-DD and ensure it is not in the future.
 - When all fields are present, reply:
   Here are your receipt details: 🏪 store_id, 💵 type, 💰 amount, 📅 date, 🔗 reference, 👤 sender_id. If everything looks good, tap the "Upload" button below to upload your transaction.
 - Always show all fields when confirming.
@@ -58,7 +57,6 @@ Task Instructions
   "amount is missing, can you send the amount?"
 - Never ask the user for their Telegram ID; always use the Telegram user ID from the message if sender_id is missing.
 - Ask for only one missing field at a time in a natural, friendly way.
-- If the date is in the future or invalid, politely flag this and ask the user to confirm or correct it.
 - When the user taps the "Upload" button, reply exactly with:
   Your transaction has been uploaded.
   Then provide the full JSON in a code block.
@@ -158,6 +156,11 @@ export async function POST(req: NextRequest) {
   if (!message) return NextResponse.json({ ok: true });
 
   const chatId = message.chat.id;
+  const telegramUserId =
+    message.from?.id ||
+    message.chat?.id ||
+    (message.chat && typeof message.chat === 'object' && message.chat.id);
+
   if (!chatHistories[chatId]) chatHistories[chatId] = [];
 
   if (!message.photo && chatHistories[chatId].length === 0) {
@@ -165,8 +168,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  // Inject Telegram user ID into the prompt
+  const promptWithUserId = transactionPrompt + `\n\nTelegram User ID for this session: ${telegramUserId}`;
+
   let aiMessages: ChatCompletionMessageParam[] = [
-    { role: 'system', content: transactionPrompt }
+    { role: 'system', content: promptWithUserId }
   ];
 
   if (message.photo) {
