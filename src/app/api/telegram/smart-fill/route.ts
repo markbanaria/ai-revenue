@@ -57,9 +57,11 @@ Task Instructions
   "amount is missing, can you send the amount?"
 - Never ask the user for their Telegram ID; always use the Telegram user ID from the message if sender_id is missing.
 - Ask for only one missing field at a time in a natural, friendly way.
-- When the user taps the "Upload" button, reply exactly with:
-  Your transaction has been uploaded.
-  Then provide the full JSON in a code block.
+- When all the fields are ready, show a sumamry of the receipt details + the upload button
+  when the user taps the "Upload" button or replies that they want to upload, reply exactly with:
+    Your transaction has been uploaded.
+    Then provide the full JSON in a code block. 
+  when the user wants to change a detail, continue the conversation and ask for the specific field they want to change.
 - Use no Markdown formatting in Telegram replies except for code blocks when uploading JSON. Emojis are allowed for clarity.
 - Stay focused on the receipt extraction task only. If the user talks about other topics, politely remind them:
   "I’m here to help with your receipt details. Let’s focus on that first."
@@ -228,6 +230,11 @@ export async function POST(req: NextRequest) {
     .trim();
 
   const parsed = extractJSON(aiReply);
+
+  // Log when JSON is detected
+  if (parsed) {
+    console.log("Detected JSON from AI reply:", parsed);
+  }
 
   // Fill sender_id with Telegram user ID if missing or empty
   if (parsed && (!parsed.sender_id || parsed.sender_id === 'unknown')) {
