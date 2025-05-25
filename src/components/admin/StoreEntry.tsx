@@ -36,7 +36,7 @@ interface StoreEntryProps {
 
 export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateEmployee, onDeleteEmployee, onConfirm, onConfirmEmployee }: StoreEntryProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isStoreEditable, setIsStoreEditable] = useState(false);
+  const [isStoreEditable, setIsStoreEditable] = useState(store.id < 0);
   const [editableEmployees, setEditableEmployees] = useState<Record<number, boolean>>({});
   const [employeeErrors, setEmployeeErrors] = useState<Record<number, { name?: string; phone?: string }>>({});
 
@@ -45,8 +45,11 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
   };
 
   const handleStoreConfirm = async () => {
-    // TODO: Implement database update
-    console.log('Updating store in database:', store);
+    // Validate store name
+    if (!store.name.trim()) {
+      alert('Store name is required.');
+      return;
+    }
     setIsStoreEditable(false);
     await onConfirm(store);
   };
@@ -62,7 +65,7 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
   const validateEmployee = (employee: Employee) => {
     const errors: { name?: string; phone?: string } = {};
     if (!employee.name.trim()) {
-      errors.name = 'Name is required';
+      errors.name = 'Employee name is required';
     }
     if (!employee.telegramPhoneNumber.trim()) {
       errors.phone = 'Phone number is required';
@@ -86,7 +89,6 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
         delete newErrors[employeeId];
         return newErrors;
       });
-      
       // Update the employee with isDataConfirmed set to true
       handleEmployeeUpdate(employeeId, { isDataConfirmed: true });
       await onConfirmEmployee(store.id, employee);
@@ -170,6 +172,8 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
               className="max-w-md"
               disabled={!isStoreEditable}
             />
+          </div>
+          <div className="flex items-center gap-2">
             <Button
               variant={isStoreEditable ? "default" : "outline"}
               size="icon"
@@ -177,14 +181,14 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
             >
               {isStoreEditable ? <Check className="h-5 w-5" /> : <Pencil className="h-5 w-5" />}
             </Button>
+            <Button
+              variant="destructive"
+              size="icon"
+              onClick={() => onDelete(store.id)}
+            >
+              <Trash2 className="h-5 w-5" />
+            </Button>
           </div>
-          <Button
-            variant="destructive"
-            size="icon"
-            onClick={() => onDelete(store.id)}
-          >
-            <Trash2 className="h-5 w-5" />
-          </Button>
         </div>
 
         {isExpanded && (
@@ -232,20 +236,6 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
                       disabled={!editableEmployees[employee.id]}
                     />
                   </div>
-                  <Button
-                    variant={editableEmployees[employee.id] ? "default" : "outline"}
-                    size="icon"
-                    onClick={editableEmployees[employee.id] 
-                      ? () => handleEmployeeConfirm(employee.id)
-                      : () => handleEmployeeEdit(employee.id)
-                    }
-                    className="shrink-0"
-                  >
-                    {editableEmployees[employee.id] 
-                      ? <Check className="h-5 w-5" />
-                      : <Pencil className="h-5 w-5" />
-                    }
-                  </Button>
                 </div>
                 <div className="flex items-center gap-2 mt-2 lg:mt-0 shrink-0">
                   <TooltipProvider>
@@ -265,14 +255,30 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    onClick={() => onDeleteEmployee(store.id, employee.id)}
-                    className="shrink-0"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={editableEmployees[employee.id] ? "default" : "outline"}
+                      size="icon"
+                      onClick={editableEmployees[employee.id] 
+                        ? () => handleEmployeeConfirm(employee.id)
+                        : () => handleEmployeeEdit(employee.id)
+                      }
+                      className="shrink-0"
+                    >
+                      {editableEmployees[employee.id] 
+                        ? <Check className="h-5 w-5" />
+                        : <Pencil className="h-5 w-5" />
+                      }
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => onDeleteEmployee(store.id, employee.id)}
+                      className="shrink-0"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}

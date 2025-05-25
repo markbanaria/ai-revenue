@@ -259,12 +259,12 @@ export default function AdminOnboardingPage() {
 
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-8">Onboarding</h1>
+      <h1 className="text-3xl font-bold mb-8">Onboard Module</h1>
       
       <div className="space-y-8">
         <Card>
           <CardHeader>
-            <CardTitle>Store and Employee Management</CardTitle>
+            <CardTitle>Store and Employee Details</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
