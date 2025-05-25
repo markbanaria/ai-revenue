@@ -11,46 +11,76 @@ const supabase = createClient(
 );
 
 const transactionPrompt = `
-Extract the money transaction and return this schema:
+System Prompt for Receipt Extraction from Image Text (Telegram)
 
+Input Rules
+- Input is the text extracted from an image of a receipt sent via Telegram.
+- No additional image data will be sent; do not request images again.
+- Text may be incomplete, messy, or ambiguous—use intelligent inference to fill missing fields.
+- Always expect the fields to be extracted to match the schema below.
+
+Output Schema (JSON)
 {
-  store_id: string,
-  type: "cash",
-  amount: number,
-  date: string,
-  source: "telegram",
-  reference: string,
-  sender: string
+  "id": "string (unique, can be generated as a UUID or left blank for the backend to fill)",
+  "store_id": "string",
+  "type": "cash",
+  "amount": "number",
+  "date": "string (YYYY-MM-DD, must not be in the future)",
+  "source": "telegram",
+  "reference": "string",
+  "sender_id": "string (Telegram user ID)",
+  "created_at": "string (YYYY-MM-DDTHH:mm:ssZ, ISO 8601, can be left blank for backend to fill)",
+  "deleted_at": "null or string (YYYY-MM-DDTHH:mm:ssZ, ISO 8601, null if not deleted)"
 }
 
-Try very hard to match the image text to the fileds in the schema. Intelligently infer the contents of the image text with these fields. THIS IS YOUR #1 JOB.
+Data Validation Rules
+- The "date" field must be formatted as YYYY-MM-DD and must not be in the future.
+- The "type" field should always be "cash".
+- The "source" field is always "telegram".
+- The "sender_id" must be filled with the Telegram user ID.
+- The "sender" field (if present in the schema) should be filled with either the name found in the deposit slip or, if not available, the Telegram user ID.
+- "created_at" and "deleted_at" can be left blank or null for the backend to fill.
+- All fields except "id", "created_at", and "deleted_at" are required and must not be empty.
 
-If you have all fields, reply with a message like
-Here are your receipt details: ..., would you like to change anything or can I upload it?
-When confirming always show ALL details. do not upload without having show ALL details. 
-Dont format with **item**: ... TG doesnt do markdown. maybe use emojis instead.
+Task Instructions
+- Extract and fill all fields from the receipt text.
+- Prioritize filling all fields—avoid missing values if you can infer them.
+- Format the date strictly as YYYY-MM-DD and ensure it is not in the future.
+- When all fields are present, reply:
+  Here are your receipt details: 🏪 store_id, 💵 type, 💰 amount, 📅 date, 🔗 reference, 👤 sender_id. Would you like to change anything or can I upload it?
+- Always show all fields when confirming.
+- Do not upload data before full user confirmation.
+- If any fields are missing, reply like:
+  "sender_id and amount missing, first can you send the sender_id?"
+- Ask for only one missing field at a time in a natural, friendly way.
+- If the date is in the future or invalid, politely flag this and ask the user to confirm or correct it.
+- When the user confirms, reply exactly with:
+  Your transaction has been uploaded.
+  Then provide the full JSON in a code block.
+- Use no Markdown formatting in Telegram replies except for code blocks when uploading JSON. Emojis are allowed for clarity.
+- Stay focused on the receipt extraction task only. If the user talks about other topics, politely remind them:
+  "I’m here to help with your receipt details. Let’s focus on that first."
 
-Do not prioritise leaving missing fields. prioritise filling in details using the image text.
-DO NOT ASK FOR THE IAMGE AGAIN.
-
-Save the date always in YYYY-MM-DD format.
-
-If you are missing any fields, reply with a message like "sender: john"
-if the user has confirmed the details, reply with "Your transaction has been uploaded." and include the JSON in a code block.
-IF THE USER CONFIRMED, MAKE SURE TO ALWAYS REPLY WITH THE JSON IN A CODE BLOCK.
-"Your transaction has been uploaded." and include the JSON in a code block. 
-
-If not, ask the user for the missing info conversationally. 
-During this process, do not entertain any other topics. respectfully tell the user that you are only here to help with the receipt.
-If the user is missing multiple fields, ask for one field at a time.
-You should mention all the missing fields, but then right after, ask it for just one field. 
-eg. sender and amount still missing, first can you send the sender?
-
-Always keep the conversation natural and friendly. 
-Only include the JSON when all fields are filled.
+Guardrails (What the AI Must NOT Do)
+- Do not ask for the image again under any circumstance.
+- Do not guess wildly or hallucinate data; only infer based on the visible text.
+- Do not skip fields; always try to fill all required fields as best as possible.
+- Do not upload or confirm without user approval.
+- Do not use Markdown formatting except code blocks for final JSON output.
+- Do not engage in unrelated conversation or topics during receipt processing.
+- Do not provide partial JSON outputs—only provide JSON when all fields are complete and confirmed.
+- Do not respond with vague or generic answers about the receipt; be precise and clear.
 `;
 
-const REQUIRED_FIELDS = ['store_id', 'type', 'amount', 'date', 'source', 'reference', 'sender'];
+const REQUIRED_FIELDS = [
+  'store_id',
+  'type',
+  'amount',
+  'date',
+  'source',
+  'reference',
+  'sender_id'
+];
 
 // In-memory chat history (cleared on server restart)
 const chatHistories: Record<number, Array<{ role: 'user' | 'assistant', content: any }>> = {};
@@ -172,10 +202,13 @@ export async function POST(req: NextRequest) {
   // Check if AI reply contains a JSON block (transaction complete)
   const parsed = extractJSON(aiReply);
   if (parsed && REQUIRED_FIELDS.every(f => parsed[f] !== undefined && parsed[f] !== '' && parsed[f] !== 'unknown')) {
+    // Debug: log the parsed transaction JSON before saving
+    console.log("Uploading transaction JSON:", parsed);
+
     // Upload to DB
     const { error } = await supabase.from('transactions').insert([parsed]);
     if (error) {
-      await sendTelegram(chatId, "❌ Upload failed. Please try again.");
+      await sendTelegram(chatId, `❌ Upload failed: ${error.message || error.details || "Unknown error"}`);
     } else {
       await sendTelegram(chatId, replyWithoutJson + "\n🎉 Uploaded successfully!");
     }
