@@ -25,7 +25,6 @@ Input Rules
 
 Output Schema (JSON)
 {
-  "store_id": "string",
   "type": "cash",
   "amount": "number",
   "date": "string (YYYY-MM-DDTHH:mm:ssZ, ISO 8601, must not be in the after ${TODAY_UTC})",
@@ -76,10 +75,10 @@ Guardrails (What the AI Must NOT Do)
 `;
 
 const REQUIRED_FIELDS = [
-  'store_id',
+  // 'store_id', // <-- remove this
   'type',
   'amount',
-  'date', // now expects ISO 8601 string
+  'date',
   'source',
   'reference',
   'sender_id'
@@ -225,6 +224,21 @@ export async function POST(req: NextRequest) {
   // Fill created_at with TODAY_UTC if missing or blank
   if (parsed && (!parsed.created_at || parsed.created_at === '')) {
     parsed.created_at = TODAY_UTC;
+  }
+
+  // Look up store_id from stores table using telegram_id
+  if (parsed && parsed.sender_id) {
+    const { data: storeData, error: storeError } = await supabase
+      .from('stores')
+      .select('id')
+      .eq('telegram_id', parsed.sender_id)
+      .single();
+
+    if (storeError || !storeData) {
+      await sendTelegram(chatId, "❌ Could not find your store. Please contact support.");
+      return NextResponse.json({ ok: false });
+    }
+    parsed.store_id = storeData.id;
   }
 
   if (parsed && REQUIRED_FIELDS.every(f => parsed[f] !== undefined && parsed[f] !== '' && parsed[f] !== 'unknown')) {
