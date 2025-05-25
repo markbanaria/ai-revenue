@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClientInstance } from '@/utils/supabase';
+import { supabase } from '@/utils/supabase';
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,7 +8,6 @@ export async function POST(req: NextRequest) {
     const sender = formData.get('sender')?.toString() || 'MJ';
     const imageFile = formData.get('image') as File;
 
-    const supabase = createClientInstance();
     const fileName = `${Date.now()}-${imageFile.name}`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
