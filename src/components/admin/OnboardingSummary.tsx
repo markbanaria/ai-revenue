@@ -23,7 +23,10 @@ interface OnboardingSummaryProps {
 }
 
 export function OnboardingSummary({ stores }: OnboardingSummaryProps) {
-  const confirmedEmployees = stores.flatMap(store =>
+  // Temporarily commented out
+  return null;
+  
+  /* const confirmedEmployees = stores.flatMap(store =>
     store.employees
       .filter(emp => emp.isDataConfirmed)  // Only show employees whose data has been confirmed
       .map(emp => ({
@@ -84,5 +87,5 @@ export function OnboardingSummary({ stores }: OnboardingSummaryProps) {
         </div>
       </CardContent>
     </Card>
-  );
+  ); */
 } 

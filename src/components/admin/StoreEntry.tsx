@@ -248,7 +248,7 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
                   </Button>
                 </div>
                 <div className="flex items-center gap-2 mt-2 lg:mt-0 shrink-0">
-                  <TooltipProvider>
+                  {/* <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -264,7 +264,7 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
                         <p>Our agent sends an onboarding message via Telegram</p>
                       </TooltipContent>
                     </Tooltip>
-                  </TooltipProvider>
+                  </TooltipProvider> */}
                   <Button
                     variant="destructive"
                     size="icon"
