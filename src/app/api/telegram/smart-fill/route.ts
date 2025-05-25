@@ -221,15 +221,15 @@ export async function POST(req: NextRequest) {
       parsed.sender_id = String(telegramUserId);
     }
   }
-
-  // If the AI is asking for confirmation, send the confirmation message (no button)
-  if (
-    parsed &&
-    REQUIRED_FIELDS.every(f => parsed[f] !== undefined && parsed[f] !== '' && parsed[f] !== 'unknown')
-  ) {
-    // Send confirmation message without upload button
-    await sendTelegram(chatId, replyWithoutJson);
-    // Do not upload or clear chat history yet; wait for user to reply "Upload"
+  if (parsed && REQUIRED_FIELDS.every(f => parsed[f] !== undefined && parsed[f] !== '' && parsed[f] !== 'unknown')) {
+    // Upload to DB
+    const { error } = await supabase.from('transactions').insert([parsed]);
+    if (error) {
+      await sendTelegram(chatId, "❌ Upload failed. Please try again.");
+    } else {
+      await sendTelegram(chatId, replyWithoutJson + "\n🎉 Uploaded successfully!");
+    }
+    delete chatHistories[chatId];
     return NextResponse.json({ ok: true });
   }
 
