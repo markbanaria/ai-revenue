@@ -35,7 +35,7 @@ interface Store {
 let tempStoreId = -1;
 let tempEmployeeId = -1;
 
-export default function AdminOnboardingPage() {
+export function AdminOnboarding() {
   const [stores, setStores] = useState<Store[]>([]);
   const [deleteStoreDialogOpen, setDeleteStoreDialogOpen] = useState(false);
   const [deleteEmployeeDialogOpen, setDeleteEmployeeDialogOpen] = useState(false);
@@ -46,11 +46,13 @@ export default function AdminOnboardingPage() {
     const fetchData = async () => {
       const { data: storeData, error: storeError } = await supabase
         .from('stores')
-        .select('*');
+        .select('*')
+        .is('deleted_at', null);
       if (storeError) return;
       const { data: employeeData, error: employeeError } = await supabase
         .from('employees')
-        .select('*');
+        .select('*')
+        .is('deleted_at', null);
       if (employeeError) return;
       const storesWithEmployees = (storeData || []).map(store => ({
         id: store.id,
@@ -118,9 +120,20 @@ export default function AdminOnboardingPage() {
     if (!store) return;
     
     if (storeId > 0) {
-      await supabase.from('employees').delete().eq('store_id', storeId);
-      await supabase.from('stores').delete().eq('id', storeId);
+      // Soft delete all employees in the store
+      await supabase
+        .from('employees')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('store_id', storeId);
+      
+      // Soft delete the store
+      await supabase
+        .from('stores')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', storeId);
     }
+    
+    // Update local state to remove the store
     setStores(stores.filter(store => store.id !== storeId));
     setDeleteStoreDialogOpen(false);
     setStoreToDelete(null);
@@ -216,14 +229,19 @@ export default function AdminOnboardingPage() {
     if (!store) return;
 
     if (employeeId > 0) {
-      const { error } = await supabase.from('employees').delete().eq('id', employeeId);
+      const { error } = await supabase
+        .from('employees')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', employeeId);
+      
       if (error) {
         alert('Failed to delete employee: ' + error.message);
-        console.error('Supabase delete error:', error);
+        console.error('Supabase update error:', error);
         return;
       }
     }
 
+    // Update local state to remove the employee
     setStores(stores.map(store =>
       store.id === storeId
         ? {
