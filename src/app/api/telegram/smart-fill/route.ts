@@ -25,7 +25,7 @@ Output Schema (JSON)
   "store_id": "string",
   "type": "cash",
   "amount": "number",
-  "date": "string (YYYY-MM-DD, must not be in the future)",
+  "date": "string (YYYY-MM-DDTHH:mm:ssZ, ISO 8601, must not be in the future)",
   "source": "telegram",
   "reference": "string",
   "sender_id": "string (Telegram user ID)",
@@ -34,7 +34,7 @@ Output Schema (JSON)
 }
 
 Data Validation Rules
-- The "date" field must be formatted as YYYY-MM-DD and must not be in the future.
+- The "date" field must be formatted as YYYY-MM-DDTHH:mm:ssZ (ISO 8601, UTC) and must not be in the future.
 - The "type" field should always be "cash".
 - The "source" field is always "telegram".
 - The "sender_id" must be filled with the Telegram user ID.
@@ -47,14 +47,15 @@ Task Instructions
 - Prioritize filling all fields—avoid missing values if you can infer them.
 - Format the date strictly as YYYY-MM-DD and ensure it is not in the future.
 - When all fields are present, reply:
-  Here are your receipt details: 🏪 store_id, 💵 type, 💰 amount, 📅 date, 🔗 reference, 👤 sender_id. Would you like to change anything or can I upload it?
+  Here are your receipt details: 🏪 store_id, 💵 type, 💰 amount, 📅 date, 🔗 reference, 👤 sender_id. If everything looks good, tap the "Upload" button below to upload your transaction.
 - Always show all fields when confirming.
 - Do not upload data before full user confirmation.
-- If any fields are missing, reply like:
-  "sender_id and amount missing, first can you send the sender_id?"
+- If any fields are missing (except sender_id), reply like:
+  "amount is missing, can you send the amount?"
+- Never ask the user for their Telegram ID; always use the Telegram user ID from the message if sender_id is missing.
 - Ask for only one missing field at a time in a natural, friendly way.
 - If the date is in the future or invalid, politely flag this and ask the user to confirm or correct it.
-- When the user confirms, reply exactly with:
+- When the user taps the "Upload" button, reply exactly with:
   Your transaction has been uploaded.
   Then provide the full JSON in a code block.
 - Use no Markdown formatting in Telegram replies except for code blocks when uploading JSON. Emojis are allowed for clarity.
@@ -76,7 +77,7 @@ const REQUIRED_FIELDS = [
   'store_id',
   'type',
   'amount',
-  'date',
+  'date', // now expects ISO 8601 string
   'source',
   'reference',
   'sender_id'
@@ -123,6 +124,30 @@ async function getTelegramPhotoUrl(fileId: string): Promise<string> {
   return `https://api.telegram.org/file/bot${process.env.TELEGRAM_TOKEN}/${filePath}`;
 }
 
+// Add stricter validation for date format (optional)
+function isValidIsoDate(dateStr: string) {
+  // Checks for ISO 8601 UTC format
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(dateStr);
+}
+
+async function sendUploadConfirmation(chatId: number, text: string) {
+  await fetch(`${TELEGRAM_API}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "✅ Upload", callback_data: "upload_transaction" }
+          ]
+        ]
+      }
+    }),
+  });
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const message = body.message;
@@ -131,7 +156,6 @@ export async function POST(req: NextRequest) {
   const chatId = message.chat.id;
   if (!chatHistories[chatId]) chatHistories[chatId] = [];
 
-  // If no image has been sent yet, prompt the user for an image
   if (!message.photo && chatHistories[chatId].length === 0) {
     await sendTelegram(chatId, "📷 Please send a photo of the receipt to begin.");
     return NextResponse.json({ ok: true });
@@ -142,14 +166,10 @@ export async function POST(req: NextRequest) {
   ];
 
   if (message.photo) {
-    // Refresh the whole thread: clear chat history for this chat when a new image is sent
     chatHistories[chatId] = [];
-
-    // Get the highest resolution photo
     const photo = message.photo[message.photo.length - 1];
     const imageUrl = await getTelegramPhotoUrl(photo.file_id);
 
-    // Prefill known fields
     const prefilled = {
       store_id: String(chatId),
       type: "cash",
@@ -169,7 +189,6 @@ export async function POST(req: NextRequest) {
         ]
       }
     );
-    // Store only the conversation (not the system prompt) for future turns
     chatHistories[chatId] = aiMessages.slice(1)
       .filter(
         (msg): msg is { role: 'user' | 'assistant'; content: any } =>
@@ -193,26 +212,34 @@ export async function POST(req: NextRequest) {
   const aiReply = res.choices[0].message.content?.trim() ?? '';
   chatHistories[chatId].push({ role: 'assistant', content: aiReply });
 
-  // Remove any JSON code block from the AI reply for Telegram messages
   const replyWithoutJson = aiReply
     .replace(/```json[\s\S]*?```/g, '')
     .replace(/```[\s\S]*?```/g, '')
     .trim();
 
-  // Check if AI reply contains a JSON block (transaction complete)
   const parsed = extractJSON(aiReply);
-  if (parsed && REQUIRED_FIELDS.every(f => parsed[f] !== undefined && parsed[f] !== '' && parsed[f] !== 'unknown')) {
-    // Debug: log the parsed transaction JSON before saving
-    console.log("Uploading transaction JSON:", parsed);
 
-    // Upload to DB
-    const { error } = await supabase.from('transactions').insert([parsed]);
-    if (error) {
-      await sendTelegram(chatId, `❌ Upload failed: ${error.message || error.details || "Unknown error"}`);
-    } else {
-      await sendTelegram(chatId, replyWithoutJson + "\n🎉 Uploaded successfully!");
+  // Fill sender_id with Telegram user ID if missing or empty
+  if (parsed && (!parsed.sender_id || parsed.sender_id === 'unknown')) {
+    const telegramUserId =
+      message.from?.id ||
+      message.chat?.id ||
+      (message.chat && typeof message.chat === 'object' && message.chat.id);
+
+    if (telegramUserId) {
+      parsed.sender_id = String(telegramUserId);
     }
-    delete chatHistories[chatId];
+  }
+
+  // If the AI is asking for confirmation, send the Upload button
+  if (
+    parsed &&
+    REQUIRED_FIELDS.every(f => parsed[f] !== undefined && parsed[f] !== '' && parsed[f] !== 'unknown') &&
+    isValidIsoDate(parsed.date)
+  ) {
+    // Instead of uploading immediately, send confirmation with Upload button
+    await sendUploadConfirmation(chatId, replyWithoutJson);
+    // Do not upload or clear chat history yet; wait for button press
     return NextResponse.json({ ok: true });
   }
 
