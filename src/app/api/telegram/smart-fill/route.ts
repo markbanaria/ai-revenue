@@ -221,6 +221,12 @@ export async function POST(req: NextRequest) {
       parsed.sender_id = String(telegramUserId);
     }
   }
+
+  // Fill created_at with TODAY_UTC if missing or blank
+  if (parsed && (!parsed.created_at || parsed.created_at === '')) {
+    parsed.created_at = TODAY_UTC;
+  }
+
   if (parsed && REQUIRED_FIELDS.every(f => parsed[f] !== undefined && parsed[f] !== '' && parsed[f] !== 'unknown')) {
     // Upload to DB
     const { error } = await supabase.from('transactions').insert([parsed]);
