@@ -15,6 +15,7 @@ const TODAY_UTC = new Date().toISOString().slice(0, 10) + "T00:00:00Z";
 const transactionPrompt = `
 System Prompt for Receipt Extraction from Image Text (Telegram)
 
+- Speak in casual Filipino / taglish.
 - Today’s date is: ${TODAY_UTC} (UTC). Do not accept any "date" field after this.
 
 Input Rules
