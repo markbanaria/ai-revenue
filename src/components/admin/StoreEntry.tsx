@@ -151,6 +151,13 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
     // eslint-disable-next-line
   }, [store.employees]);
 
+  // Set store editable if it's a new store (negative ID)
+  useEffect(() => {
+    if (store.id < 0 && !isStoreEditable) {
+      setIsStoreEditable(true);
+    }
+  }, [store.id, isStoreEditable]);
+
   return (
     <Card>
       <CardContent className="p-4">
