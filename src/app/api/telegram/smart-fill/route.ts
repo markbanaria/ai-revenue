@@ -30,7 +30,6 @@ Output Schema (JSON)
   "date": "string (YYYY-MM-DDTHH:mm:ssZ, ISO 8601, must not be in the after ${TODAY_UTC})",
   "source": "telegram",
   "reference": "string",
-  "sender_id": "string (Telegram user ID)",
   "created_at": "string (YYYY-MM-DDTHH:mm:ssZ, ISO 8601, can be left blank for backend to fill)",
   "deleted_at": "null or string (YYYY-MM-DDTHH:mm:ssZ, ISO 8601, null if not deleted)"
 }
@@ -80,8 +79,7 @@ const REQUIRED_FIELDS = [
   'amount',
   'date',
   'source',
-  'reference',
-  'sender_id'
+  'reference'
 ];
 
 // In-memory chat history (cleared on server restart)
@@ -143,11 +141,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // Inject Telegram user ID into the prompt
-  const promptWithUserId = transactionPrompt + `\n\nTelegram User ID for this session: ${telegramUserId}`;
-
   let aiMessages: ChatCompletionMessageParam[] = [
-    { role: 'system', content: promptWithUserId }
+    { role: 'system', content: transactionPrompt }
   ];
 
   if (message.photo) {
@@ -210,28 +205,16 @@ export async function POST(req: NextRequest) {
   }
 
   // Fill sender_id with Telegram user ID if missing or empty
-  if (parsed && (!parsed.sender_id || parsed.sender_id === 'unknown')) {
+  if (parsed) {
     const telegramUserId =
       message.from?.id ||
       message.chat?.id ||
       (message.chat && typeof message.chat === 'object' && message.chat.id);
-
-    if (telegramUserId) {
-      parsed.sender_id = String(telegramUserId);
-    }
-  }
-
-  // Fill created_at with TODAY_UTC if missing or blank
-  if (parsed && (!parsed.created_at || parsed.created_at === '')) {
     parsed.created_at = TODAY_UTC;
-  }
-
-  // Look up store_id from stores table using telegram_id
-  if (parsed && parsed.sender_id) {
     const { data: storeData, error: storeError } = await supabase
       .from('stores')
       .select('id')
-      .eq('telegram_id', parsed.sender_id)
+      .eq('telegram_id', telegramUserId)
       .single();
 
     if (storeError || !storeData) {
