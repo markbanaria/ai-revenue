@@ -221,7 +221,10 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabase.from('transactions').insert([parsed]);
     console.log("Supabase insert result:", { data, error }); // <-- log result
     if (error) {
-      await sendTelegram(chatId, "❌ Upload failed. Please try again.");
+      await sendTelegram(
+        chatId,
+        `❌ Upload failed. Please try again.\nError: ${error.message || JSON.stringify(error)}`
+      );
     } else {
       await sendTelegram(chatId, replyWithoutJson + "\n🎉 Uploaded successfully!");
     }
