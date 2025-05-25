@@ -46,7 +46,7 @@ Task Instructions
 - Extract and fill all fields from the receipt text.
 - Prioritize filling all fields—avoid missing values if you can infer them.
 - When all fields are present, reply:
-  Here are your receipt details: 💵 type, 💰 amount, 📅 date, 🔗 reference. If everything looks good, reply with "Upload" to upload your transaction.
+  Ito ang nabasa ko sa image: 💵 type, 💰 amount, 📅 date, 🔗 reference. Kung ok na lahat, pwede na i-upload?.
 - Always show all fields when confirming.
 - Do not upload data before full user confirmation.
 - If any fields are missing, reply like:
