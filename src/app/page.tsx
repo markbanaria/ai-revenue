@@ -20,7 +20,7 @@ export default function HomePage() {
           </Card>
         </Link>
 
-        <Link href="/admin/onboarding">
+        <Link href="/onboarding">
           <Card className="hover:bg-gray-50 transition-colors">
             <CardHeader>
               <CardTitle>Onboarding</CardTitle>
