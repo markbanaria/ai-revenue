@@ -99,30 +99,17 @@ export function OnboardingSummary({ stores }: OnboardingSummaryProps) {
                     )}
                   </div>
                   <div className="space-y-0.5">
-                    <p className="text-sm text-muted-foreground">
+                    {/* <p className="text-sm text-muted-foreground">
                       Telegram: {employee.telegramPhoneNumber}
-                    </p>
+                    </p> */}
                     <p className="text-sm text-muted-foreground">
                       Store: {employee.storeName}
                     </p>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                  <div className="flex items-center gap-2">
-                    {employee.hasConfirmed ? (
-                      <>
-                        <CheckCircle2 className="h-5 w-5 text-green-500" />
-                        <span className="text-sm text-green-500">Onboarded</span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="h-5 w-5 text-red-500" />
-                        <span className="text-sm text-red-500">Not Onboarded</span>
-                      </>
-                    )}
-                  </div>
+                <div className="flex items-center gap-4">
                   {!employee.hasConfirmed && (
-                    <div className="flex flex-col items-end gap-1">
+                    <div className="w-[180px]">
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -133,7 +120,7 @@ export function OnboardingSummary({ stores }: OnboardingSummaryProps) {
                                 ? handleCopyLink(employee.id)
                                 : handleGenerateLink(employee)
                               }
-                              className="whitespace-nowrap"
+                              className="w-full"
                             >
                               {copiedStates[employee.id] ? (
                                 <>
@@ -156,12 +143,25 @@ export function OnboardingSummary({ stores }: OnboardingSummaryProps) {
                         </Tooltip>
                       </TooltipProvider>
                       {generatedLinks[employee.id] && (
-                        <p className="text-xs text-muted-foreground max-w-[200px] truncate">
+                        <p className="text-xs text-muted-foreground max-w-[180px] truncate mt-1">
                           {generatedLinks[employee.id]}
                         </p>
                       )}
                     </div>
                   )}
+                  <div className="flex items-center gap-2">
+                    {employee.hasConfirmed ? (
+                      <>
+                        <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        <span className="text-sm text-green-500">Onboarded</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="h-5 w-5 text-red-500" />
+                        <span className="text-sm text-red-500">Not Onboarded</span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             ))

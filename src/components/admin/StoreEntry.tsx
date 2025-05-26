@@ -64,9 +64,9 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
     if (!employee.name.trim()) {
       errors.name = 'Name is required';
     }
-    if (!employee.telegramPhoneNumber.trim()) {
-      errors.phone = 'Phone number is required';
-    }
+    // if (!employee.telegramPhoneNumber.trim()) {
+    //   errors.phone = 'Phone number is required';
+    // }
     return errors;
   };
 
@@ -211,22 +211,6 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
                     />
                     {employeeErrors[employee.id]?.name && (
                       <p className="text-xs text-red-500">{employeeErrors[employee.id].name}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1 w-full lg:w-auto min-w-0">
-                    <Input
-                      placeholder="Telegram Mobile Number"
-                      value={employee.telegramPhoneNumber}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        handleEmployeeUpdate(employee.id, {
-                          telegramPhoneNumber: e.target.value,
-                        })
-                      }
-                      className={`w-full lg:w-48 ${employeeErrors[employee.id]?.phone ? 'border-red-500' : ''}`}
-                      disabled={!editableEmployees[employee.id]}
-                    />
-                    {employeeErrors[employee.id]?.phone && (
-                      <p className="text-xs text-red-500">{employeeErrors[employee.id].phone}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

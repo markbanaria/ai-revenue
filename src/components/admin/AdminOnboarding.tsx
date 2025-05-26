@@ -64,7 +64,7 @@ export function AdminOnboarding() {
             name: emp.employee_name,
             isManager: emp.store_manager,
             telegramPhoneNumber: emp.mobile_number,
-            hasConfirmed: false,
+            hasConfirmed: emp.telegram_bot_confirmed === true && emp.telegram_id !== null,
             isDataConfirmed: true,
           })),
       }));
