@@ -20,8 +20,8 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: 'AI Revenue Calculator',
-  description: 'Admin onboarding and revenue calculation tool',
+  title: 'Daily Detox',
+  description: 'Revenue Data Collection',
 }
 
 export default function RootLayout({

@@ -25,7 +25,7 @@ export function Sidebar() {
   return (
     <div className="w-64 bg-gray-50 border-r h-screen p-4">
       <div className="mb-8">
-        <h1 className="text-xl font-bold">AI Revenue</h1>
+        <h1 className="text-xl font-bold">Daily Detox</h1>
       </div>
       <nav className="space-y-2">
         {routes.map((route) => (
