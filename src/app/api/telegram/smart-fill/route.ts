@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
     // First, let's check all employees with tokens to see what we have
     const { data: allEmployees, error: listError } = await supabase
       .from('employees')
-      .select('id, name, telegram_onboard_token')
+      .select('id, employee_name, telegram_onboard_token')
       .not('telegram_onboard_token', 'is', null);
 
     console.error('All employees with tokens:', allEmployees);
@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
     // Now find the specific employee
     const { data: employee, error: employeeError } = await supabase
       .from('employees')
-      .select('id, name, store_id, telegram_onboard_token')
+      .select('id, employee_name, store_id, telegram_onboard_token')
       .eq('telegram_onboard_token', token)
       .single();
 
@@ -223,7 +223,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    await sendTelegram(chatId, `✅ Welcome ${employee.name}! You have been successfully onboarded. You can now start sending receipt photos.`);
+    await sendTelegram(chatId, `✅ Welcome ${employee.employee_name}! You have been successfully onboarded. You can now start sending receipt photos.`);
     return NextResponse.json({ ok: true });
   }
   // --- End start command handler ---
