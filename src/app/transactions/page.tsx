@@ -4,6 +4,19 @@ import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addWeeks, add
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { TransactionHistory } from '@/components/TransactionHistory';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -29,6 +42,8 @@ export default function TransactionsPage() {
     });
     const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), "yyyy-MM"));
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+    const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
     // Generate week options for the past 12 weeks
     const weekOptions = Array.from({ length: 12 }).map((_, i) => {
@@ -88,7 +103,7 @@ export default function TransactionsPage() {
             }
             // For "all", don't set fromDate/toDate
 
-            let query = supabase.from("transactions").select("*");
+            let query = supabase.from("transactions").select("*").is("deleted_at", null);
             if (period !== "all") {
                 const isoFrom = fromDate!.toISOString();
                 const isoTo = toDate!.toISOString();
@@ -106,168 +121,88 @@ export default function TransactionsPage() {
     // eslint-disable-next-line
     }, [period, selectedDay, selectedWeek, selectedMonth]);
 
-	// Columns to show (excluding id, sender_id, deleted_at, store_id)
-	const visibleColumns = transactions[0]
-		? Object.keys(transactions[0]).filter(
-			key => !["id", "sender_id", "deleted_at", "store_id"].includes(key)
-		)
-		: [];
+    const handleSelectAll = (checked: boolean) => {
+        if (checked) {
+            const allIds = new Set(transactions.map(tx => tx.id));
+            setSelectedTransactions(allIds);
+        } else {
+            setSelectedTransactions(new Set());
+        }
+    };
 
-	// Add store_name as first column and ensure created_at is last
-	const columns = ["store_name", ...visibleColumns.filter(col => col !== 'created_at'), 'created_at'];
+    const handleSelectTransaction = (id: string, checked: boolean) => {
+        const newSelected = new Set(selectedTransactions);
+        if (checked) {
+            newSelected.add(id);
+        } else {
+            newSelected.delete(id);
+        }
+        setSelectedTransactions(newSelected);
+    };
 
-	// Map transactions to include store_name
-	const mappedTx = transactions.map(tx => ({
-		...tx,
-		store_name: stores[tx.store_id] || tx.store_id
-	}));
+    const handleDelete = async () => {
+        const selectedIds = Array.from(selectedTransactions);
+        const { error } = await supabase
+            .from('transactions')
+            .update({ deleted_at: new Date().toISOString() })
+            .in('id', selectedIds);
 
-	// Add sorting function
-	const sortData = (data: any[]) => {
-		if (!sortConfig) return data;
+        if (!error) {
+            setTransactions(transactions.filter(tx => !selectedIds.includes(tx.id)));
+            setSelectedTransactions(new Set());
+            setDeleteDialogOpen(false);
+        }
+    };
 
-		return [...data].sort((a, b) => {
-			let aValue = a[sortConfig.key];
-			let bValue = b[sortConfig.key];
+    return (
+        <div className="container mx-auto py-8">
+            <h1 className="text-3xl font-bold mb-8">Transactions</h1>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Transaction History</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <TransactionHistory
+                        transactions={transactions}
+                        stores={stores}
+                        period={period}
+                        selectedDay={selectedDay}
+                        selectedWeek={selectedWeek}
+                        selectedMonth={selectedMonth}
+                        sortConfig={sortConfig}
+                        selectedTransactions={selectedTransactions}
+                        onPeriodChange={setPeriod}
+                        onDayChange={setSelectedDay}
+                        onWeekChange={setSelectedWeek}
+                        onMonthChange={setSelectedMonth}
+                        onSort={(key) => {
+                            let direction: 'asc' | 'desc' = 'asc';
+                            if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+                                direction = 'desc';
+                            }
+                            setSortConfig({ key, direction });
+                        }}
+                        onSelectAll={handleSelectAll}
+                        onSelectTransaction={handleSelectTransaction}
+                        onDelete={() => setDeleteDialogOpen(true)}
+                    />
+                </CardContent>
+            </Card>
 
-			// Handle special cases for different column types
-			if (sortConfig.key === 'amount') {
-				aValue = Number(aValue) || 0;
-				bValue = Number(bValue) || 0;
-			} else if (['date', 'created_at'].includes(sortConfig.key)) {
-				aValue = new Date(aValue).getTime();
-				bValue = new Date(bValue).getTime();
-			} else {
-				aValue = String(aValue).toLowerCase();
-				bValue = String(bValue).toLowerCase();
-			}
-
-			if (aValue < bValue) {
-				return sortConfig.direction === 'asc' ? -1 : 1;
-			}
-			if (aValue > bValue) {
-				return sortConfig.direction === 'asc' ? 1 : -1;
-			}
-			return 0;
-		});
-	};
-
-	const requestSort = (key: string) => {
-		let direction: 'asc' | 'desc' = 'asc';
-		if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-			direction = 'desc';
-		}
-		setSortConfig({ key, direction });
-	};
-
-	// Calculate total (assuming 'amount' column)
-	const total = mappedTx.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
-
-	// Sort the transactions
-	const sortedTransactions = sortData(mappedTx);
-
-	return (
-		<div className="container mx-auto py-8">
-			<h1 className="text-3xl font-bold mb-8">Transactions</h1>
-			<div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
-				<div className="flex items-center gap-2">
-					<label className="font-medium">Period:</label>
-					<select
-						className="border rounded px-2 py-1"
-						value={period}
-						onChange={e => setPeriod(e.target.value)}
-					>
-						{PERIODS.map(p => (
-							<option key={p.value} value={p.value}>{p.label}</option>
-						))}
-					</select>
-					{period === "day" && (
-						<input
-							type="date"
-							className="border rounded px-2 py-1"
-							value={selectedDay}
-							onChange={e => setSelectedDay(e.target.value)}
-						/>
-					)}
-					{period === "week" && (
-						<select
-							className="border rounded px-2 py-1"
-							value={selectedWeek || weekOptions[0].value}
-							onChange={e => setSelectedWeek(e.target.value)}
-						>
-							{weekOptions.map(opt => (
-								<option key={opt.value} value={opt.value}>{opt.label}</option>
-							))}
-						</select>
-					)}
-					{period === "month" && (
-						<select
-							className="border rounded px-2 py-1"
-							value={selectedMonth}
-							onChange={e => setSelectedMonth(e.target.value)}
-						>
-							{monthOptions.map(opt => (
-								<option key={opt.value} value={opt.value}>{opt.label}</option>
-							))}
-						</select>
-					)}
-				</div>
-				<div className="text-lg font-semibold">
-					Total: <span className="text-green-600">₱{total.toLocaleString()}</span>
-				</div>
-			</div>
-			<Card>
-				<CardHeader>
-					<CardTitle>Transaction History</CardTitle>
-				</CardHeader>
-				<CardContent>
-					{loading ? (
-						<p>Loading...</p>
-					) : (
-						<div className="overflow-x-auto">
-							<table className="min-w-full border">
-								<thead>
-									<tr>
-										{columns.map(key => (
-											<th 
-												key={key} 
-												className="border px-4 py-2 text-left bg-gray-100 cursor-pointer hover:bg-gray-200"
-												onClick={() => requestSort(key)}
-											>
-												<div className="flex items-center gap-2">
-													{key.replace('_', ' ').toUpperCase()}
-													{sortConfig?.key === key && (
-														<span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-													)}
-												</div>
-											</th>
-										))}
-									</tr>
-								</thead>
-								<tbody>
-									{sortedTransactions.map((tx, idx) => (
-										<tr key={tx.date + idx} className="hover:bg-gray-50">
-											{columns.map((col, i) => (
-												<td key={i} className="border px-4 py-2">
-													{col === 'amount' 
-														? `₱${Number(tx[col]).toLocaleString()}`
-														: ["date", "created_at"].includes(col)
-															? format(new Date(tx[col]), "MMM dd yyyy")
-															: String(tx[col])
-													}
-												</td>
-											))}
-										</tr>
-									))}
-								</tbody>
-							</table>
-							{sortedTransactions.length === 0 && (
-								<div className="text-center text-gray-500 py-8">No transactions found for this period.</div>
-							)}
-						</div>
-					)}
-				</CardContent>
-			</Card>
-		</div>
-	);
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will delete the selected transactions. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div>
+    );
 }

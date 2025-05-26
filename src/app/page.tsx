@@ -26,6 +26,17 @@ export default function HomePage() {
               <CardTitle>Onboarding</CardTitle>
             </CardHeader>
             <CardContent>
+              <p>Review onboarding status of employees</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/stores">
+          <Card className="hover:bg-gray-50 transition-colors">
+            <CardHeader>
+              <CardTitle>Store and Employee Management</CardTitle>
+            </CardHeader>
+            <CardContent>
               <p>Manage stores and employees</p>
             </CardContent>
           </Card>

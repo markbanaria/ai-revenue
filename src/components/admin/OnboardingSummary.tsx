@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle2, XCircle, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { supabase } from '@/utils/supabase';
 
 interface Employee {
   id: number;
@@ -22,13 +23,41 @@ interface Store {
   employees: Employee[];
 }
 
-interface OnboardingSummaryProps {
-  stores: Store[];
-}
-
-export function OnboardingSummary({ stores }: OnboardingSummaryProps) {
+export function OnboardingSummary() {
+  const [stores, setStores] = useState<Store[]>([]);
   const [copiedStates, setCopiedStates] = useState<Record<number, boolean>>({});
   const [generatedLinks, setGeneratedLinks] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const { data: storeData, error: storeError } = await supabase
+        .from('stores')
+        .select('*')
+        .is('deleted_at', null);
+      if (storeError) return;
+      const { data: employeeData, error: employeeError } = await supabase
+        .from('employees')
+        .select('*')
+        .is('deleted_at', null);
+      if (employeeError) return;
+      const storesWithEmployees = (storeData || []).map(store => ({
+        id: store.id,
+        name: store.store_name,
+        employees: (employeeData || [])
+          .filter(emp => emp.store_id === store.id)
+          .map(emp => ({
+            id: emp.id,
+            name: emp.employee_name,
+            isManager: emp.store_manager,
+            telegramPhoneNumber: emp.mobile_number,
+            hasConfirmed: emp.telegram_bot_confirmed === true && emp.telegram_id !== null,
+            isDataConfirmed: true,
+          })),
+      }));
+      setStores(storesWithEmployees);
+    };
+    fetchData();
+  }, []);
 
   const handleGenerateLink = async (employee: Employee) => {
     try {

@@ -18,7 +18,11 @@ export function Sidebar() {
     },
     {
       href: '/onboarding',
-      label: 'Onboarding',
+      label: 'Onboarding Status',
+    },
+    {
+      href: '/stores',
+      label: 'Store and Employee Management',
     },
   ];
 

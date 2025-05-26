@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StoreEntry } from '@/components/admin/StoreEntry';
-import { OnboardingSummary } from '@/components/admin/OnboardingSummary';
 import { supabase } from '@/utils/supabase';
 import {
   AlertDialog,
@@ -35,7 +34,7 @@ interface Store {
 let tempStoreId = -1;
 let tempEmployeeId = -1;
 
-export function AdminOnboarding() {
+export default function StoresPage() {
   const [stores, setStores] = useState<Store[]>([]);
   const [deleteStoreDialogOpen, setDeleteStoreDialogOpen] = useState(false);
   const [deleteEmployeeDialogOpen, setDeleteEmployeeDialogOpen] = useState(false);
@@ -73,7 +72,6 @@ export function AdminOnboarding() {
     fetchData();
   }, []);
 
-  // Add Store (local only)
   const handleAddStore = () => {
     setStores([
       ...stores,
@@ -81,10 +79,8 @@ export function AdminOnboarding() {
     ]);
   };
 
-  // Confirm Store (insert or update in Supabase)
   const handleStoreConfirm = async (store: Store) => {
     if (store.id < 0) {
-      // Insert new store
       const { data, error } = await supabase
         .from('stores')
         .insert([{ store_name: store.name }])
@@ -95,7 +91,6 @@ export function AdminOnboarding() {
         s.id === store.id ? { ...store, id: data.id } : s
       ));
     } else {
-      // Update existing store
       await supabase
         .from('stores')
         .update({ store_name: store.name })
@@ -106,7 +101,6 @@ export function AdminOnboarding() {
     }
   };
 
-  // Delete Store (and its employees)
   const handleStoreDelete = async (storeId: number) => {
     setStoreToDelete(storeId);
     setDeleteStoreDialogOpen(true);
@@ -120,26 +114,22 @@ export function AdminOnboarding() {
     if (!store) return;
     
     if (storeId > 0) {
-      // Soft delete all employees in the store
       await supabase
         .from('employees')
         .update({ deleted_at: new Date().toISOString() })
         .eq('store_id', storeId);
       
-      // Soft delete the store
       await supabase
         .from('stores')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', storeId);
     }
     
-    // Update local state to remove the store
     setStores(stores.filter(store => store.id !== storeId));
     setDeleteStoreDialogOpen(false);
     setStoreToDelete(null);
   };
 
-  // Add Employee (local only)
   const handleAddEmployee = async (storeId: number) => {
     setStores(stores.map(store =>
       store.id === storeId
@@ -161,10 +151,8 @@ export function AdminOnboarding() {
     ));
   };
 
-  // Confirm Employee (insert or update in Supabase)
   const handleEmployeeConfirm = async (storeId: number, employee: Employee) => {
     if (employee.id < 0) {
-      // Insert new employee
       const { data, error } = await supabase
         .from('employees')
         .insert([
@@ -191,7 +179,6 @@ export function AdminOnboarding() {
           : store
       ));
     } else {
-      // Update existing employee
       await supabase
         .from('employees')
         .update({
@@ -215,7 +202,6 @@ export function AdminOnboarding() {
     }
   };
 
-  // Delete Employee
   const handleEmployeeDelete = async (storeId: number, employeeId: number) => {
     setEmployeeToDelete({ storeId, employeeId });
     setDeleteEmployeeDialogOpen(true);
@@ -241,7 +227,6 @@ export function AdminOnboarding() {
       }
     }
 
-    // Update local state to remove the employee
     setStores(stores.map(store =>
       store.id === storeId
         ? {
@@ -254,14 +239,12 @@ export function AdminOnboarding() {
     setEmployeeToDelete(null);
   };
 
-  // Update Store (local only, for typing)
   const handleStoreUpdate = async (updatedStore: Store) => {
     setStores(stores.map(store =>
       store.id === updatedStore.id ? updatedStore : store
     ));
   };
 
-  // Update Employee (local only, for typing)
   const handleEmployeeUpdate = async (storeId: number, updatedEmployee: Employee) => {
     setStores(stores.map(store =>
       store.id === storeId
@@ -277,51 +260,44 @@ export function AdminOnboarding() {
 
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-8">Onboarding</h1>
-      
-      <div className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Store and Employee Management</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {stores.map(store => (
-                <StoreEntry
-                  key={store.id}
-                  store={store}
-                  onUpdate={handleStoreUpdate}
-                  onDelete={handleStoreDelete}
-                  onAddEmployee={handleAddEmployee}
-                  onUpdateEmployee={handleEmployeeUpdate}
-                  onDeleteEmployee={handleEmployeeDelete}
-                  onConfirm={handleStoreConfirm}
-                  onConfirmEmployee={handleEmployeeConfirm}
-                />
-              ))}
-              <Button onClick={handleAddStore} className="w-full">
-                Add New Store
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <OnboardingSummary stores={stores} />
-      </div>
+      <h1 className="text-3xl font-bold mb-8">Store and Employee Management</h1>
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Stores</CardTitle>
+            <Button onClick={handleAddStore}>Add Store</Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {stores.map((store) => (
+              <StoreEntry
+                key={store.id}
+                store={store}
+                onUpdate={handleStoreUpdate}
+                onDelete={handleStoreDelete}
+                onAddEmployee={handleAddEmployee}
+                onUpdateEmployee={handleEmployeeUpdate}
+                onDeleteEmployee={handleEmployeeDelete}
+                onConfirm={handleStoreConfirm}
+                onConfirmEmployee={handleEmployeeConfirm}
+              />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <AlertDialog open={deleteStoreDialogOpen} onOpenChange={setDeleteStoreDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Store</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the store? This cannot be undone.
+              This will delete the store and all its employees. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>No, please cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmStoreDelete} className="bg-red-600 hover:bg-red-700">
-              Yes, please proceed
-            </AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStoreDelete}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -329,16 +305,14 @@ export function AdminOnboarding() {
       <AlertDialog open={deleteEmployeeDialogOpen} onOpenChange={setDeleteEmployeeDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Employee</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the employee information? This cannot be undone.
+              This will delete the employee. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>No, please cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmEmployeeDelete} className="bg-red-600 hover:bg-red-700">
-              Yes, please proceed
-            </AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmEmployeeDelete}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
