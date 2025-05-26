@@ -20,15 +20,15 @@ export default function TransactionsPage() {
     const [transactions, setTransactions] = useState<any[]>([]);
     const [stores, setStores] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
-    const [period, setPeriod] = useState("all"); // Set default to "all"
+    const [period, setPeriod] = useState("all");
     const [selectedDay, setSelectedDay] = useState(() => format(new Date(), "yyyy-MM-dd"));
     const [selectedWeek, setSelectedWeek] = useState(() => {
-        // Default to the most recent week
         const now = new Date();
         const weekStart = startOfWeek(now, { weekStartsOn: 0 });
         return format(weekStart, "yyyy-MM-dd");
     });
     const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), "yyyy-MM"));
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
     // Generate week options for the past 12 weeks
     const weekOptions = Array.from({ length: 12 }).map((_, i) => {
@@ -93,10 +93,10 @@ export default function TransactionsPage() {
                 const isoFrom = fromDate!.toISOString();
                 const isoTo = toDate!.toISOString();
                 query = query
-                    .gte("date", isoFrom) // changed from "transaction_date"
-                    .lte("date", isoTo);  // changed from "transaction_date"
+                    .gte("created_at", isoFrom)
+                    .lte("created_at", isoTo);
             }
-            query = query.order("date", { ascending: false }); // changed from "transaction_date"
+            query = query.order("created_at", { ascending: false });
 
             const { data: txData, error } = await query;
             if (!error) setTransactions(txData || []);
@@ -113,8 +113,8 @@ export default function TransactionsPage() {
 		)
 		: [];
 
-	// Add store_name as first column
-	const columns = ["store_name", ...visibleColumns];
+	// Add store_name as first column and ensure created_at is last
+	const columns = ["store_name", ...visibleColumns.filter(col => col !== 'created_at'), 'created_at'];
 
 	// Map transactions to include store_name
 	const mappedTx = transactions.map(tx => ({
@@ -122,8 +122,49 @@ export default function TransactionsPage() {
 		store_name: stores[tx.store_id] || tx.store_id
 	}));
 
+	// Add sorting function
+	const sortData = (data: any[]) => {
+		if (!sortConfig) return data;
+
+		return [...data].sort((a, b) => {
+			let aValue = a[sortConfig.key];
+			let bValue = b[sortConfig.key];
+
+			// Handle special cases for different column types
+			if (sortConfig.key === 'amount') {
+				aValue = Number(aValue) || 0;
+				bValue = Number(bValue) || 0;
+			} else if (['date', 'created_at'].includes(sortConfig.key)) {
+				aValue = new Date(aValue).getTime();
+				bValue = new Date(bValue).getTime();
+			} else {
+				aValue = String(aValue).toLowerCase();
+				bValue = String(bValue).toLowerCase();
+			}
+
+			if (aValue < bValue) {
+				return sortConfig.direction === 'asc' ? -1 : 1;
+			}
+			if (aValue > bValue) {
+				return sortConfig.direction === 'asc' ? 1 : -1;
+			}
+			return 0;
+		});
+	};
+
+	const requestSort = (key: string) => {
+		let direction: 'asc' | 'desc' = 'asc';
+		if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+			direction = 'desc';
+		}
+		setSortConfig({ key, direction });
+	};
+
 	// Calculate total (assuming 'amount' column)
 	const total = mappedTx.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+
+	// Sort the transactions
+	const sortedTransactions = sortData(mappedTx);
 
 	return (
 		<div className="container mx-auto py-8">
@@ -172,7 +213,7 @@ export default function TransactionsPage() {
 					)}
 				</div>
 				<div className="text-lg font-semibold">
-					Total: <span className="text-green-600">${total.toLocaleString()}</span>
+					Total: <span className="text-green-600">₱{total.toLocaleString()}</span>
 				</div>
 			</div>
 			<Card>
@@ -186,26 +227,41 @@ export default function TransactionsPage() {
 						<div className="overflow-x-auto">
 							<table className="min-w-full border">
 								<thead>
-                    <tr>{columns.map(key => (
-                        <th key={key} className="border px-4 py-2 text-left bg-gray-100">{key.replace('_', ' ').toUpperCase()}</th>
-                    ))}</tr>
-                </thead>
-                <tbody>
-                    {mappedTx.map((tx, idx) => (
-                        <tr key={tx.date + idx} className="hover:bg-gray-50">
-                            {columns.map((col, i) => (
-                                <td key={i} className="border px-4 py-2">
-                                    {["date", "created_at"].includes(col)
-                                        ? format(new Date(tx[col]), "MMM dd yyyy")
-                                        : String(tx[col])
-                                    }
-                                </td>
-                            ))}
-                        </tr>
-                    ))}
-                </tbody>
+									<tr>
+										{columns.map(key => (
+											<th 
+												key={key} 
+												className="border px-4 py-2 text-left bg-gray-100 cursor-pointer hover:bg-gray-200"
+												onClick={() => requestSort(key)}
+											>
+												<div className="flex items-center gap-2">
+													{key.replace('_', ' ').toUpperCase()}
+													{sortConfig?.key === key && (
+														<span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+													)}
+												</div>
+											</th>
+										))}
+									</tr>
+								</thead>
+								<tbody>
+									{sortedTransactions.map((tx, idx) => (
+										<tr key={tx.date + idx} className="hover:bg-gray-50">
+											{columns.map((col, i) => (
+												<td key={i} className="border px-4 py-2">
+													{col === 'amount' 
+														? `₱${Number(tx[col]).toLocaleString()}`
+														: ["date", "created_at"].includes(col)
+															? format(new Date(tx[col]), "MMM dd yyyy")
+															: String(tx[col])
+													}
+												</td>
+											))}
+										</tr>
+									))}
+								</tbody>
 							</table>
-							{mappedTx.length === 0 && (
+							{sortedTransactions.length === 0 && (
 								<div className="text-center text-gray-500 py-8">No transactions found for this period.</div>
 							)}
 						</div>
