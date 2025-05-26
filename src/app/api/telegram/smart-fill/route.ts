@@ -300,21 +300,21 @@ export async function POST(req: NextRequest) {
       message.from?.id ||
       message.chat?.id ||
       (message.chat && typeof message.chat === 'object' && message.chat.id);
-    const { data: storeData, error: storeError } = await supabase
-      .from('stores')
-      .select('id')
+    const { data: employeeData, error: employeeError } = await supabase
+      .from('employees')
+      .select('store_id')
       .eq('telegram_id', telegramUserId)
       .single();
 
-    if (storeError || !storeData) {
+    if (employeeError || !employeeData || !employeeData.store_id) {
       await sendTelegram(
         chatId,
-        "❌ Store not found. Please register your store first by typing:\n/register <store name>"
+        "❌ Store not found for your account. Please complete onboarding or contact your store manager."
       );
       return NextResponse.json({ ok: false });
     }
-    parsed.store_id = storeData.id;
-    console.log("Store ID found:", parsed.store_id);
+    parsed.store_id = employeeData.store_id;
+    console.log("Store ID found via employee:", parsed.store_id);
 
 
     // Upload to DB
