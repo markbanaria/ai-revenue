@@ -123,6 +123,8 @@ async function getTelegramPhotoUrl(fileId: string): Promise<string> {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  console.log('Received webhook:', JSON.stringify(body, null, 2));
+  
   const message = body.message;
   if (!message) return NextResponse.json({ ok: true });
 
@@ -165,19 +167,42 @@ export async function POST(req: NextRequest) {
   // --- Start command handler ---
   if (message.text && message.text.startsWith('/start')) {
     const token = message.text.replace('/start', '').trim();
+    console.error('Received start command with token:', token);
+    
     if (!token) {
       await sendTelegram(chatId, "❗ Please use the onboarding link provided by your store manager.");
       return NextResponse.json({ ok: true });
     }
 
-    // Find employee with matching token
+    // First, let's check all employees with tokens to see what we have
+    const { data: allEmployees, error: listError } = await supabase
+      .from('employees')
+      .select('id, name, telegram_onboard_token')
+      .not('telegram_onboard_token', 'is', null);
+
+    console.error('All employees with tokens:', allEmployees);
+
+    // Now find the specific employee
     const { data: employee, error: employeeError } = await supabase
       .from('employees')
-      .select('id, name, store_id')
+      .select('id, name, store_id, telegram_onboard_token')
       .eq('telegram_onboard_token', token)
       .single();
 
-    if (employeeError || !employee) {
+    console.error('Employee lookup result:', { 
+      searchedToken: token,
+      foundEmployee: employee,
+      error: employeeError 
+    });
+
+    if (employeeError) {
+      console.error('Employee lookup error:', employeeError);
+      await sendTelegram(chatId, "❌ Invalid or expired onboarding link. Please contact your store manager.");
+      return NextResponse.json({ ok: true });
+    }
+
+    if (!employee) {
+      console.error('No employee found with token:', token);
       await sendTelegram(chatId, "❌ Invalid or expired onboarding link. Please contact your store manager.");
       return NextResponse.json({ ok: true });
     }
@@ -193,6 +218,7 @@ export async function POST(req: NextRequest) {
       .eq('id', employee.id);
 
     if (updateError) {
+      console.error('Employee update error:', updateError);
       await sendTelegram(chatId, "❌ Failed to complete onboarding. Please try again or contact your store manager.");
       return NextResponse.json({ ok: true });
     }
