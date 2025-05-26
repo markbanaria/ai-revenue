@@ -255,23 +255,6 @@ export function StoreEntry({ store, onUpdate, onDelete, onAddEmployee, onUpdateE
                   </Button>
                 </div>
                 <div className="flex items-center gap-2 mt-2 lg:mt-0 shrink-0">
-                  {/* <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          onClick={() => handleSendTelegramMessage(employee)}
-                          disabled={!employee.telegramPhoneNumber || employee.hasConfirmed}
-                          className="whitespace-nowrap w-full lg:w-auto"
-                        >
-                          Onboard
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Our agent sends an onboarding message via Telegram</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider> */}
                   <Button
                     variant="destructive"
                     size="icon"

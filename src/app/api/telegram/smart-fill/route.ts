@@ -16,7 +16,7 @@ const transactionPrompt = `
 System Prompt for Receipt Extraction from Image Text (Telegram)
 
 - Speak in casual Filipino / taglish.
-- Today’s date is: ${TODAY_UTC} (UTC). Do not accept any "date" field after this.
+- Today's date is: ${TODAY_UTC} (UTC). Do not accept any "date" field after this.
 
 Input Rules
 - Input is the text extracted from an image of a receipt sent via Telegram.
@@ -59,7 +59,7 @@ Task Instructions
   when the user wants to change a detail, continue the conversation and ask for the specific field they want to change.
 - Use no Markdown formatting in Telegram replies except for code blocks when uploading JSON. Emojis are allowed for clarity.
 - Stay focused on the receipt extraction task only. If the user talks about other topics, politely remind them:
-  "I’m here to help with your receipt details. Let’s focus on that first."
+  "I'm here to help with your receipt details. Let's focus on that first."
 
 Guardrails (What the AI Must NOT Do)
 - Do not ask for the image again under any circumstance.
@@ -161,6 +161,46 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
   // --- End register command handler ---
+
+  // --- Start command handler ---
+  if (message.text && message.text.startsWith('/start')) {
+    const token = message.text.replace('/start', '').trim();
+    if (!token) {
+      await sendTelegram(chatId, "❗ Please use the onboarding link provided by your store manager.");
+      return NextResponse.json({ ok: true });
+    }
+
+    // Find employee with matching token
+    const { data: employee, error: employeeError } = await supabase
+      .from('employees')
+      .select('id, name, store_id')
+      .eq('telegram_onboard_token', token)
+      .single();
+
+    if (employeeError || !employee) {
+      await sendTelegram(chatId, "❌ Invalid or expired onboarding link. Please contact your store manager.");
+      return NextResponse.json({ ok: true });
+    }
+
+    // Update employee with Telegram ID and confirmation status
+    const { error: updateError } = await supabase
+      .from('employees')
+      .update({
+        telegram_id: telegramUserId,
+        telegram_bot_confirmed: true,
+        telegram_onboard_token: null // Clear the token after use
+      })
+      .eq('id', employee.id);
+
+    if (updateError) {
+      await sendTelegram(chatId, "❌ Failed to complete onboarding. Please try again or contact your store manager.");
+      return NextResponse.json({ ok: true });
+    }
+
+    await sendTelegram(chatId, `✅ Welcome ${employee.name}! You have been successfully onboarded. You can now start sending receipt photos.`);
+    return NextResponse.json({ ok: true });
+  }
+  // --- End start command handler ---
 
   if (!chatHistories[chatId]) chatHistories[chatId] = [];
 
