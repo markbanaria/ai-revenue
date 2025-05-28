@@ -2,6 +2,7 @@ import { NextResponse, NextRequest } from 'next/server';
 import { OpenAI } from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { formatInTimeZone } from 'date-fns-tz';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}`;
@@ -10,13 +11,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const TODAY_UTC = new Date().toISOString().slice(0, 10) + "T00:00:00Z";
+const TODAY_UTC = formatInTimeZone(new Date(), 'Asia/Manila', "yyyy-MM-dd'T'00:00:00'Z'");
 
 const transactionPrompt = `
 System Prompt for Receipt Extraction from Image Text (Telegram)
 
 - Speak in casual Filipino / taglish.
-- Today's date is: ${TODAY_UTC} (UTC). Do not accept any "date" field after this.
+- Today's date is: ${TODAY_UTC} (PHT). Do not accept any "date" field after this.
 
 Input Rules
 - Input is the text extracted from an image of a receipt sent via Telegram.
@@ -36,7 +37,7 @@ Output Schema (JSON)
 }
 
 Data Validation Rules
-- The "date" field must be formatted as YYYY-MM-DDTHH:mm:ssZ (ISO 8601, UTC) and must not be after ${TODAY_UTC}.
+- The "date" field must be formatted as YYYY-MM-DDTHH:mm:ssZ (ISO 8601, PHT) and must not be after ${TODAY_UTC}
 - The "type" field should always be "cash".
 - The "source" field is always "telegram".
 - "created_at" and "deleted_at" can be left blank or null for the backend to fill.

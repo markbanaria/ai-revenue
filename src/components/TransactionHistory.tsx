@@ -1,6 +1,7 @@
 'use client';
 
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addWeeks, subMonths } from "date-fns";
+import { formatInTimeZone } from 'date-fns-tz';
 import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
 import {
@@ -188,7 +189,7 @@ export function TransactionHistory({
           )}
         </div>
         <div className="text-lg font-semibold">
-          Total: ${total.toFixed(2)}
+          Total: ₱{total.toFixed(2)}
         </div>
       </div>
 
@@ -234,9 +235,9 @@ export function TransactionHistory({
                 {columns.map(column => (
                   <td key={column} className="p-2">
                     {column === 'created_at' || column === 'date'
-                      ? format(new Date(tx[column]), 'MMM d, yyyy h:mm a')
+                      ? formatInTimeZone(new Date(tx[column]), 'Asia/Manila', 'MMM d, yyyy h:mm a')
                       : column === 'amount'
-                        ? `$${Number(tx[column]).toFixed(2)}`
+                        ? `₱${Number(tx[column]).toFixed(2)}`
                         : tx[column]}
                   </td>
                 ))}

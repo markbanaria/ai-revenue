@@ -1,6 +1,7 @@
 'use client';
 
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addWeeks, addMonths, subMonths } from "date-fns";
+import { formatInTimeZone } from 'date-fns-tz';
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,7 +52,7 @@ export default function TransactionsPage() {
         const weekStart = startOfWeek(addWeeks(now, -i), { weekStartsOn: 0 });
         const weekEnd = endOfWeek(addWeeks(now, -i), { weekStartsOn: 0 });
         return {
-            label: `${format(weekStart, "MMM d")}–${format(weekEnd, "MMM d, yyyy")}`,
+            label: `${formatInTimeZone(weekStart, 'Asia/Manila', "MMM d")}–${formatInTimeZone(weekEnd, 'Asia/Manila', "MMM d, yyyy")}`,
             value: format(weekStart, "yyyy-MM-dd"),
         };
     });
@@ -60,7 +61,7 @@ export default function TransactionsPage() {
     const monthOptions = Array.from({ length: 12 }).map((_, i) => {
         const monthDate = subMonths(new Date(), i);
         return {
-            label: format(monthDate, "MMMM yyyy"),
+            label: formatInTimeZone(monthDate, 'Asia/Manila', "MMMM yyyy"),
             value: format(monthDate, "yyyy-MM"),
         };
     });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/utils/supabase';
+import { formatInTimeZone } from 'date-fns-tz';
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
 
     // Simulated OCR + RAG logic
     const mockAmount = 1532.75;
-    const mockDate = new Date().toISOString().split('T')[0];
+    const mockDate = formatInTimeZone(new Date(), 'Asia/Manila', "yyyy-MM-dd");
 
     const { error: dbError } = await supabase.from('transactions').insert({
       store_id: storeId,

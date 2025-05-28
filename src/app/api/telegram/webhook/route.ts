@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { OpenAI } from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import { formatInTimeZone } from 'date-fns-tz';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}`;
@@ -100,8 +101,11 @@ async function extractFromImage(imageUrl: string, chatId: number, message: any) 
       const amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, "")) : null;
 
       if (amount) {
-        const sentDate = new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000)
-          .toISOString().slice(0, 10);
+        const sentDate = formatInTimeZone(
+          new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000),
+          'Asia/Manila',
+          "yyyy-MM-dd"
+        );
 
         return {
           data: {
@@ -123,8 +127,11 @@ async function extractFromImage(imageUrl: string, chatId: number, message: any) 
       987654321: 'store_002',
     };
     const storeId = STORE_MAP[chatId] || 'store_unknown';
-    const sentDate = new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000)
-      .toISOString().slice(0, 10);
+    const sentDate = formatInTimeZone(
+      new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000),
+      'Asia/Manila',
+      "yyyy-MM-dd"
+    );
 
     const d = Array.isArray(parsed) ? parsed[0] : parsed;
     return {
@@ -156,8 +163,11 @@ async function extractFromText(rawText: string, chatId: number, message: any) {
     const parsed = content ? extractJSON(content) : null;
     if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) return { data: null };
 
-    const sentDate = new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000)
-      .toISOString().slice(0, 10);
+    const sentDate = formatInTimeZone(
+      new Date((message.date ?? Math.floor(Date.now() / 1000)) * 1000),
+      'Asia/Manila',
+      "yyyy-MM-dd"
+    );
 
     const d = Array.isArray(parsed) ? parsed[0] : parsed;
     return {
