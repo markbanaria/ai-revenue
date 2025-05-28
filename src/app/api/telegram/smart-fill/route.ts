@@ -305,6 +305,7 @@ export async function POST(req: NextRequest) {
       .from('employees')
       .select('store_id')
       .eq('telegram_id', telegramUserId)
+      .is('deleted_at', null) // Only match if not deleted
       .single();
 
     if (employeeError || !employeeData || !employeeData.store_id) {
